@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-{% if production %}edit{% else %}plus{% endif %}"></i>
+    {% if production %}تعديل إنتاج{% else %}إضافة إنتاج جديد{% endif %}
+</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-calendar"></i> التاريخ
+                            </label>
+                            <input type="date" name="date" class="form-control"
+                                   value="{{ production.date.strftime('%Y-%m-%d') if production else '' }}" required>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-industry"></i> المكينة
+                            </label>
+                            <select name="machine_id" class="form-select" required>
+                                <option value="">اختر المكينة...</option>
+                                {% for m in machines %}
+                                <option value="{{ m.id }}" {% if production and production.machine_id == m.id %}selected{% endif %}>
+                                    {{ m.name }} - {{ m.operator_name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-box"></i> نوع الكيس
+                            </label>
+                            <select name="bag_type_id" class="form-select" required>
+                                <option value="">اختر نوع الكيس...</option>
+                                {% for bt in bag_types %}
+                                <option value="{{ bt.id }}" data-price="{{ bt.price_per_bag }}"
+                                        {% if production and production.bag_type_id == bt.id %}selected{% endif %}>
+                                    {{ bt.full_name }} - {{ "%.2f"|format(bt.price_per_bag) }} ريال
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-sort-numeric-up"></i> الكمية
+                            </label>
+                            <input type="number" name="quantity" class="form-control"
+                                   value="{{ production.quantity if production else '' }}"
+                                   min="1" required id="quantity">
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-user"></i> اسم العاملة
+                            </label>
+                            <input type="text" name="worker_name" class="form-control"
+                                   value="{{ production.worker_name if production else '' }}"
+                                   placeholder="اختياري للعاملات المؤقتات">
+                        </div>
+
+                        <div class="col-md-6 mb-3">
+                            <div class="form-check mt-4">
+                                <input type="checkbox" name="is_temporary" class="form-check-input" id="isTemporary"
+                                       {% if production and production.is_temporary %}checked{% endif %}>
+                                <label class="form-check-label" for="isTemporary">
+                                    <i class="fas fa-user-clock"></i> عاملة مؤقتة
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="col-12 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-sticky-note"></i> ملاحظات
+                            </label>
+                            <textarea name="notes" class="form-control" rows="3">{{ production.notes if production else '' }}</textarea>
+                        </div>
+
+                        <div class="col-12 mb-3">
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle"></i>
+                                <strong>الإجمالي:</strong>
+                                <span id="totalAmount">0.00</span> ريال
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary px-5">
+                            <i class="fas fa-save"></i> حفظ
+                        </button>
+                        <a href="{{ url_for('production_list') }}" class="btn btn-secondary px-5">
+                            <i class="fas fa-times"></i> إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// حساب الإجمالي تلقائياً
+const quantityInput = document.getElementById('quantity');
+const bagTypeSelect = document.querySelector('select[name="bag_type_id"]');
+const totalSpan = document.getElementById('totalAmount');
+
+function calculateTotal() {
+    const quantity = parseInt(quantityInput.value) || 0;
+    const selectedOption = bagTypeSelect.options[bagTypeSelect.selectedIndex];
+    const price = parseFloat(selectedOption?.dataset?.price) || 0;
+    const total = quantity * price;
+    totalSpan.textContent = total.toFixed(2);
+}
+
+quantityInput.addEventListener('input', calculateTotal);
+bagTypeSelect.addEventListener('change', calculateTotal);
+calculateTotal();
+</script>
+{% endblock %}

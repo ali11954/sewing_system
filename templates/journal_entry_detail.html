@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-receipt"></i> تفاصيل القيد رقم {{ entry.id }}</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <div class="row">
+                    <div class="col">
+                        <strong>رقم القيد:</strong> {{ entry.reference_number }}
+                    </div>
+                    <div class="col">
+                        <strong>التاريخ:</strong> {{ entry.date.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col">
+                        <strong>الحالة:</strong>
+                        {% if entry.is_posted %}
+                        <span class="badge bg-success">مرحل</span>
+                        {% else %}
+                        <span class="badge bg-warning">مسودة</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <strong>الوصف:</strong>
+                    <p>{{ entry.description }}</p>
+                </div>
+
+                <div class="mb-3">
+                    <strong>الملاحظات:</strong>
+                    <p>{{ entry.notes or '-' }}</p>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>رقم الحساب</th>
+                                <th>اسم الحساب</th>
+                                <th>مدين</th>
+                                <th>دائن</th>
+                                <th>ملاحظات</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for detail in entry.details %}
+                            <tr>
+                                <td>{{ detail.account.account_number }}</td>
+                                <td>{{ detail.account.account_name }}</td>
+                                <td class="text-success">{{ "%.2f"|format(detail.debit) if detail.debit > 0 else '-' }}</td>
+                                <td class="text-danger">{{ "%.2f"|format(detail.credit) if detail.credit > 0 else '-' }}</td>
+                                <td>{{ detail.notes or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-secondary">
+                                <th colspan="2" class="text-end">الإجمالي:</th>
+                                <th class="text-success">{{ "%.2f"|format(entry.total_debit) }}</th>
+                                <th class="text-danger">{{ "%.2f"|format(entry.total_credit) }}</th>
+                                <th></th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="alert {% if entry.is_balanced %}alert-success{% else %}alert-danger{% endif %} mt-3">
+                    <i class="fas fa-{% if entry.is_balanced %}check-circle{% else %}exclamation-circle{% endif %}"></i>
+                    {% if entry.is_balanced %}
+                    القيد متوازن ✅
+                    {% else %}
+                    القيد غير متوازن ❌ (الفرق: {{ "%.2f"|format(entry.total_debit - entry.total_credit) }})
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-footer">
+                <div class="text-muted small">
+                    <i class="fas fa-user"></i> تم الإنشاء بواسطة: {{ entry.created_by or 'system' }}
+                    <i class="fas fa-clock ms-3"></i> {{ entry.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <a href="{{ url_for('journal_entries') }}" class="btn btn-secondary">
+                <i class="fas fa-arrow-right"></i> العودة للقائمة
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

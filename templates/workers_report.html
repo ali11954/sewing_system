@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-chalkboard-user"></i> تقرير الخياطات</h2>
+{% endblock %}
+
+{% block content %}
+<!-- نموذج اختيار الفترة -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="POST" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" name="start_date" class="form-control" value="{{ start_date.strftime('%Y-%m-%d') }}" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" name="end_date" class="form-control" value="{{ end_date.strftime('%Y-%m-%d') }}" required>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">طريقة الدفع</label>
+                <select name="payment_method" class="form-select">
+                    <option value="cash" {% if payment_method == 'cash' %}selected{% endif %}>نقدي</option>
+                    <option value="bank" {% if payment_method == 'bank' %}selected{% endif %}>تحويل بنكي</option>
+                    <option value="check" {% if payment_method == 'check' %}selected{% endif %}>شيك</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="fas fa-search"></i> عرض التقرير
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ملخص الفترة -->
+<div class="alert alert-info">
+    <div class="row text-center">
+        <div class="col-md-4">
+            <h5>الفترة</h5>
+            <p>{{ start_date.strftime('%Y-%m-%d') }} إلى {{ end_date.strftime('%Y-%m-%d') }}</p>
+        </div>
+        <div class="col-md-4">
+            <h5>عدد الخياطات</h5>
+            <p>{{ workers|length }}</p>
+        </div>
+        <div class="col-md-4">
+            <h5>إجمالي المستحق</h5>
+            <h4 class="text-success">{{ "%.2f"|format(total_workers_amount) }} ريال</h4>
+        </div>
+    </div>
+</div>
+
+<!-- بطاقات الخياطات -->
+{% for worker in workers %}
+<div class="card mb-4">
+    <div class="card-header bg-white">
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h4 class="mb-0">
+                    <i class="fas fa-user-circle"></i> {{ worker.name }}
+                    {% if worker.type == 'permanent' %}
+                    <span class="badge bg-success ms-2">دائمة</span>
+                    <small class="text-muted ms-2">{{ worker.machine_name }}</small>
+                    {% else %}
+                    <span class="badge bg-warning ms-2">مؤقتة</span>
+                    {% endif %}
+                </h4>
+            </div>
+            <div class="col-md-6 text-end">
+                <h4 class="text-primary mb-0">{{ "%.2f"|format(worker.net_amount) }} ريال</h4>
+                <small>الصافي المستحق</small>
+            </div>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- جدول الإنتاج -->
+        <h6><i class="fas fa-boxes"></i> الإنتاج</h6>
+        <div class="table-responsive mb-3">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>المكينة</th>
+                        <th>نوع الكيس</th>
+                        <th>الكمية</th>
+                        <th>المبلغ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in worker.productions %}
+                    <tr>
+                        <td>{{ prod.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ prod.machine }}</td>
+                        <td>{{ prod.bag_type }}</td>
+                        <td>{{ prod.quantity }}</td>
+                        <td>{{ "%.2f"|format(prod.amount) }}</td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="5" class="text-center">لا يوجد إنتاج</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <th colspan="3" class="text-end">الإجمالي:</th>
+                        <th>{{ worker.total_quantity }}</th>
+                        <th>{{ "%.2f"|format(worker.total_amount) }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- جدول السلف -->
+        {% if worker.advances %}
+        <h6><i class="fas fa-hand-holding-usd"></i> السلف</h6>
+        <div class="table-responsive mb-3">
+            <table class="table table-sm">
+                <thead>
+                    <tr>
+                        <th>التاريخ</th>
+                        <th>المبلغ</th>
+                        <th>ملاحظات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for adv in worker.advances %}
+                    <tr>
+                        <td>{{ adv.date.strftime('%Y-%m-%d') }}</td>
+                        <td class="text-danger">{{ "%.2f"|format(adv.amount) }}</td>
+                        <td>{{ adv.notes or '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <th class="text-end">إجمالي السلف:</th>
+                        <th class="text-danger">{{ "%.2f"|format(worker.total_advances) }}</th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+        {% endif %}
+
+        <!-- تفاصيل الحساب -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td>إجمالي الأجور:</td>
+                                        <td class="text-end text-success">{{ "%.2f"|format(worker.total_amount) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>عمولة المتعهدة ({{ "%.0f"|format(settings.contractor_percentage) if settings else 0 }}%):</td>
+                                        <td class="text-end text-danger">- {{ "%.2f"|format(worker.contractor_commission) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>التأمينات:</td>
+                                        <td class="text-end text-danger">- {{ "%.2f"|format(worker.insurance) }}</td>
+                                    </tr>
+                                </table>
+                            </div>
+                            <div class="col-md-6">
+                                <table class="table table-sm table-borderless">
+                                    <tr>
+                                        <td>الضرائب:</td>
+                                        <td class="text-end text-danger">- {{ "%.2f"|format(worker.tax) }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>إجمالي السلف:</td>
+                                        <td class="text-end text-danger">- {{ "%.2f"|format(worker.total_advances) }}</td>
+                                    </tr>
+                                    <tr class="table-primary">
+                                        <td><strong>الصافي المستحق:</strong></td>
+                                        <td class="text-end"><strong>{{ "%.2f"|format(worker.net_amount) }}</strong></td>
+                                    </tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="card-footer">
+        <div class="row">
+            <div class="col-md-6">
+                <div class="form-check">
+                    <input type="checkbox" class="form-check-input" id="paid_{{ loop.index }}">
+                    <label class="form-check-label" for="paid_{{ loop.index }}">
+                        تم الدفع
+                    </label>
+                </div>
+            </div>
+            <div class="col-md-6 text-end">
+                <select id="payment_method_{{ loop.index }}" class="form-select form-select-sm d-inline-block w-auto">
+                    <option value="cash">نقدي</option>
+                    <option value="bank">تحويل بنكي</option>
+                    <option value="check">شيك</option>
+                </select>
+                <button class="btn btn-success btn-sm" onclick="recordPayment('{{ worker.name }}', {{ worker.net_amount }})">
+                    <i class="fas fa-money-bill"></i> تسجيل الدفع
+                </button>
+                <button class="btn btn-info btn-sm" onclick="printWorkerReport('{{ worker.name }}')">
+                    <i class="fas fa-print"></i> طباعة
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="alert alert-warning text-center">
+    <i class="fas fa-info-circle"></i> لا توجد بيانات للفترة المحددة
+</div>
+{% endfor %}
+
+<!-- إجماليات عامة -->
+<div class="card mt-4">
+    <div class="card-header bg-success text-white">
+        <h4 class="mb-0"><i class="fas fa-chart-bar"></i> إجماليات التقرير</h4>
+    </div>
+    <div class="card-body">
+        <div class="row">
+            <div class="col-md-3 text-center">
+                <h6>إجمالي الإنتاج</h6>
+                <h4>{{ "%.0f"|format(workers|sum(attribute='total_quantity')) }} كيس</h4>
+            </div>
+            <div class="col-md-3 text-center">
+                <h6>إجمالي الأجور</h6>
+                <h4 class="text-success">{{ "%.2f"|format(workers|sum(attribute='total_amount')) }} ريال</h4>
+            </div>
+            <div class="col-md-3 text-center">
+                <h6>إجمالي السلف</h6>
+                <h4 class="text-danger">{{ "%.2f"|format(workers|sum(attribute='total_advances')) }} ريال</h4>
+            </div>
+            <div class="col-md-3 text-center">
+                <h6>إجمالي الصافي</h6>
+                <h4 class="text-primary">{{ "%.2f"|format(total_workers_amount) }} ريال</h4>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function recordPayment(workerName, amount) {
+    if (amount <= 0) {
+        alert('لا يوجد مبلغ مستحق للدفع');
+        return;
+    }
+
+    if (confirm(`هل أنت متأكد من تسجيل دفع مبلغ ${amount} ريال للعاملة ${workerName}؟`)) {
+        // إرسال طلب تسجيل الدفع
+        fetch(`/workers_report/payment/${workerName}/${amount}/cash`, {
+            method: 'POST'
+        }).then(response => {
+            if (response.ok) {
+                alert('تم تسجيل الدفع بنجاح');
+                location.reload();
+            } else {
+                alert('حدث خطأ في تسجيل الدفع');
+            }
+        });
+    }
+}
+
+function printWorkerReport(workerName) {
+    // طباعة تقرير عاملة محددة
+    const workerCard = event.target.closest('.card');
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(workerCard.outerHTML);
+    printWindow.print();
+}
+</script>
+{% endblock %}

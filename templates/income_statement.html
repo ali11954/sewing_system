@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-chart-line"></i> قائمة الدخل</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <div class="row">
+                    <div class="col">
+                        <i class="fas fa-calendar"></i> الفترة من
+                        <strong>{{ statement.start_date.strftime('%Y-%m-%d') if statement.start_date else 'بداية الشهر' }}</strong>
+                        إلى
+                        <strong>{{ statement.end_date.strftime('%Y-%m-%d') if statement.end_date else 'اليوم' }}</strong>
+                    </div>
+                    <div class="col-auto">
+                        <button class="btn btn-sm btn-primary" onclick="window.location.href='{{ url_for('income_statement') }}'">
+                            <i class="fas fa-sync-alt"></i> تحديث
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- نموذج اختيار الفترة -->
+                <form method="POST" class="mb-4">
+                    <div class="row">
+                        <div class="col-md-5">
+                            <label class="form-label">تاريخ البداية</label>
+                            <input type="date" name="start_date" class="form-control"
+                                   value="{{ statement.start_date.strftime('%Y-%m-%d') if statement.start_date else '' }}">
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label">تاريخ النهاية</label>
+                            <input type="date" name="end_date" class="form-control"
+                                   value="{{ statement.end_date.strftime('%Y-%m-%d') if statement.end_date else '' }}">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label">&nbsp;</label>
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="fas fa-search"></i> عرض
+                            </button>
+                        </div>
+                    </div>
+                </form>
+
+                <hr>
+
+                <!-- الإيرادات -->
+                <div class="mb-4">
+                    <h5 class="text-success">
+                        <i class="fas fa-plus-circle"></i> الإيرادات
+                    </h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <td>إيراد الخياطة</td>
+                            <td class="text-end fw-bold">{{ "%.2f"|format(statement.total_revenue) }}</td>
+                        </tr>
+                        <tr class="table-secondary">
+                            <td><strong>إجمالي الإيرادات</strong></td>
+                            <td class="text-end fw-bold text-success">{{ "%.2f"|format(statement.total_revenue) }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <!-- المصروفات -->
+                <div class="mb-4">
+                    <h5 class="text-danger">
+                        <i class="fas fa-minus-circle"></i> المصروفات
+                    </h5>
+                    <table class="table table-sm">
+                        <tr>
+                            <td>أجور الخياطات</td>
+                            <td class="text-end">{{ "%.2f"|format(statement.total_expenses * 0.7) if statement.total_expenses > 0 else '0.00' }}</td>
+                        </tr>
+                        <tr>
+                            <td>عمولة المتعهدة</td>
+                            <td class="text-end">{{ "%.2f"|format(statement.total_expenses * 0.2) if statement.total_expenses > 0 else '0.00' }}</td>
+                        </tr>
+                        <tr>
+                            <td>التأمينات</td>
+                            <td class="text-end">{{ "%.2f"|format(statement.total_expenses * 0.05) if statement.total_expenses > 0 else '0.00' }}</td>
+                        </tr>
+                        <tr>
+                            <td>الضرائب</td>
+                            <td class="text-end">{{ "%.2f"|format(statement.total_expenses * 0.05) if statement.total_expenses > 0 else '0.00' }}</td>
+                        </tr>
+                        <tr class="table-secondary">
+                            <td><strong>إجمالي المصروفات</strong></td>
+                            <td class="text-end fw-bold text-danger">{{ "%.2f"|format(statement.total_expenses) }}</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <hr>
+
+                <!-- صافي الدخل -->
+                <div class="text-center p-3 {% if statement.net_income >= 0 %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %} rounded">
+                    <h4>صافي الدخل</h4>
+                    <h2 class="{% if statement.net_income >= 0 %}text-success{% else %}text-danger{% endif %}">
+                        {{ "%.2f"|format(statement.net_income) }} ريال
+                    </h2>
+                    <small class="text-muted">
+                        {% if statement.net_income >= 0 %}
+                        <i class="fas fa-chart-line"></i> أرباح
+                        {% else %}
+                        <i class="fas fa-chart-line fa-flip-horizontal"></i> خسائر
+                        {% endif %}
+                    </small>
+                </div>
+
+                <!-- نسبة الربحية -->
+                {% if statement.total_revenue > 0 %}
+                <div class="mt-3">
+                    <div class="progress" style="height: 20px;">
+                        {% set profit_percentage = (statement.net_income / statement.total_revenue * 100) if statement.total_revenue > 0 else 0 %}
+                        <div class="progress-bar {% if profit_percentage >= 0 %}bg-success{% else %}bg-danger{% endif %}"
+                             role="progressbar"
+                             style="width: {{ profit_percentage|abs if profit_percentage|abs <= 100 else 100 }}%"
+                             aria-valuenow="{{ profit_percentage }}"
+                             aria-valuemin="0"
+                             aria-valuemax="100">
+                            {{ "%.1f"|format(profit_percentage) }}%
+                        </div>
+                    </div>
+                    <div class="text-center text-muted small mt-2">
+                        نسبة الربحية: {{ "%.2f"|format(profit_percentage) }}%
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="card-footer">
+                <div class="text-center">
+                    <button class="btn btn-secondary" onclick="window.print()">
+                        <i class="fas fa-print"></i> طباعة التقرير
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// تحديث النموذج تلقائياً عند تغيير التواريخ
+document.querySelectorAll('input[type="date"]').forEach(input => {
+    input.addEventListener('change', function() {
+        this.form.submit();
+    });
+});
+</script>
+{% endblock %}

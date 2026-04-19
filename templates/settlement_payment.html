@@ -1,0 +1,216 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-money-bill-wave"></i> دفع المستخلص وتوزيع الأجور</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- معلومات المستخلص -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-file-invoice"></i> معلومات المستخلص
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>رقم المستخلص:</strong> {{ settlement.id }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>الفترة:</strong> {{ settlement.start_date.strftime('%Y-%m-%d') }} إلى {{ settlement.end_date.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>إجمالي الإنتاج:</strong>
+                        <span class="text-success">{{ "%.2f"|format(settlement.total_production_amount) }} ريال</span>
+                    </div>
+                    <div class="col-md-3">
+                        <strong>صافي المستحق:</strong>
+                        <span class="text-primary fw-bold">{{ "%.2f"|format(settlement.net_amount) }} ريال</span>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <strong>الحالة:</strong>
+                        {% if settlement.status == 'draft' %}
+                        <span class="badge bg-warning">مسودة</span>
+                        {% elif settlement.status == 'posted' %}
+                        <span class="badge bg-info">مرحل</span>
+                        {% elif settlement.status == 'paid_to_contractor' %}
+                        <span class="badge bg-primary">تم الدفع للمتعهدة</span>
+                        {% elif settlement.status == 'distributed' %}
+                        <span class="badge bg-success">تم التوزيع على الخياطات</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if not payment or payment.status == 'pending' %}
+        <!-- خطوة 1: دفع المبلغ للمتعهدة -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-building"></i> الخطوة 1: دفع المبلغ للشركة / المتعهدة
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <input type="hidden" name="action" value="pay_contractor">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <label class="form-label">المبلغ المدفوع</label>
+                            <input type="number" step="0.01" name="amount" class="form-control"
+                                   value="{{ settlement.net_amount }}" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">طريقة الدفع</label>
+                            <select name="payment_method" class="form-select" required>
+                                <option value="cash">نقدي</option>
+                                <option value="bank">تحويل بنكي</option>
+                                <option value="check">شيك</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">رقم المرجع (إيصال/شيك)</label>
+                            <input type="text" name="reference_number" class="form-control"
+                                   placeholder="رقم الإيصال أو الشيك">
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <button type="submit" class="btn btn-primary"
+                                onclick="return confirm('هل أنت متأكد من تسجيل دفع مبلغ {{ "%.2f"|format(settlement.net_amount) }} ريال للمتعهدة؟')">
+                            <i class="fas fa-check"></i> تسجيل الدفع للمتعهدة
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if payment and payment.status == 'paid_to_contractor' %}
+        <!-- خطوة 2: توزيع المبالغ على الخياطات -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-users"></i> الخطوة 2: توزيع المبالغ على الخياطات
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>إجمالي المبلغ المدفوع للمتعهدة:</strong> {{ "%.2f"|format(payment.amount) }} ريال
+                    <br>
+                    <strong>إجمالي المستحق للخياطات:</strong> {{ "%.2f"|format(workers|sum(attribute='net_amount')) }} ريال
+                </div>
+
+                <form method="POST">
+                    <input type="hidden" name="action" value="distribute_to_workers">
+                    <input type="hidden" name="payment_id" value="{{ payment.id }}">
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>اسم الخياطة</th>
+                                    <th>النوع</th>
+                                    <th>إجمالي الأجور</th>
+                                    <th>الخصومات</th>
+                                    <th>السلف</th>
+                                    <th>الصافي</th>
+                                    <th>المبلغ المدفوع</th>
+                                    <th>طريقة الدفع</th>
+                                    <th>رقم الإيصال</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for worker in workers %}
+                                <tr>
+                                    <td>
+                                        {{ worker.name }}
+                                        <input type="hidden" name="worker_{{ worker.name }}" value="{{ worker.name }}">
+                                    </td>
+                                    <td>
+                                        {% if worker.type == 'permanent' %}
+                                        <span class="badge bg-success">دائمة</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">مؤقتة</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-success">{{ "%.2f"|format(worker.total_amount) }}</td>
+                                    <td class="text-danger">
+                                        {{ "%.2f"|format(worker.contractor_commission + worker.insurance + worker.tax) }}
+                                    </td>
+                                    <td class="text-danger">{{ "%.2f"|format(worker.total_advances) }}</td>
+                                    <td class="text-primary fw-bold">{{ "%.2f"|format(worker.net_amount) }}</td>
+                                    <td>
+                                        <input type="number" step="0.01" name="amount_{{ worker.name }}"
+                                               class="form-control" value="{{ worker.net_amount }}"
+                                               style="width: 120px;" required>
+                                    </td>
+                                    <td>
+                                        <select name="method_{{ worker.name }}" class="form-select" style="width: 100px;">
+                                            <option value="cash">نقدي</option>
+                                            <option value="bank">تحويل</option>
+                                            <option value="check">شيك</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="receipt_{{ worker.name }}" class="form-control"
+                                               placeholder="رقم الإيصال" style="width: 120px;">
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-secondary">
+                                    <th colspan="5" class="text-end">الإجمالي:</th>
+                                    <th>{{ "%.2f"|format(workers|sum(attribute='net_amount')) }}</th>
+                                    <th colspan="3"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div class="mt-3 text-center">
+                        <button type="submit" class="btn btn-success btn-lg"
+                                onclick="return confirm('هل أنت متأكد من توزيع المبالغ على الخياطات؟')">
+                            <i class="fas fa-hand-holding-heart"></i> توزيع المبالغ على الخياطات
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if payment and payment.status == 'distributed' %}
+        <!-- تم التوزيع بنجاح -->
+        <div class="alert alert-success text-center">
+            <i class="fas fa-check-circle fa-3x"></i>
+            <h4>تم دفع المستخلص وتوزيعه على الخياطات بنجاح!</h4>
+            <p>تاريخ الدفع: {{ payment.payment_date.strftime('%Y-%m-%d') }}</p>
+            <p>طريقة الدفع: {{ payment.payment_method }}</p>
+            <p>رقم المرجع: {{ payment.reference_number or '-' }}</p>
+
+            <hr>
+
+            <h5>إيصالات الدفع للخياطات:</h5>
+            <div class="row">
+                {% for wp in payment.worker_payments %}
+                <div class="col-md-3 mb-2">
+                    <a href="{{ url_for('worker_payment_receipt', worker_payment_id=wp.id) }}" class="btn btn-sm btn-info" target="_blank">
+                        <i class="fas fa-print"></i> إيصال {{ wp.worker_name }}
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="mt-3">
+                <a href="{{ url_for('settlements_list') }}" class="btn btn-primary">
+                    <i class="fas fa-arrow-right"></i> العودة للمستخلصات
+                </a>
+                <button onclick="window.print()" class="btn btn-secondary">
+                    <i class="fas fa-print"></i> طباعة التقرير
+                </button>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

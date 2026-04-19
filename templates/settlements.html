@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-file-invoice"></i> المستخلصات</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('create_settlement') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> إنشاء مستخلص جديد
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>الفترة</th>
+                        <th>النوع</th>
+                        <th>إجمالي الإنتاج</th>
+                        <th>عمولة المتعهدة</th>
+                        <th>التأمين</th>
+                        <th>الضريبة</th>
+                        <th>السلف</th>
+                        <th>الصافي</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for s in settlements %}
+                    <tr {% if s.status == 'posted' %} style="background-color: #e8f5e9;" {% endif %}>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ s.start_date.strftime('%Y-%m-%d') }} - {{ s.end_date.strftime('%Y-%m-%d') }}</td>
+                        <td>
+                            {% if s.settlement_type == 'weekly' %}
+                            <span class="badge bg-info">أسبوعي</span>
+                            {% elif s.settlement_type == 'monthly' %}
+                            <span class="badge bg-primary">شهري</span>
+                            {% else %}
+                            <span class="badge bg-secondary">مخصص</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-success">{{ "%.2f"|format(s.total_production_amount) }}</td>
+                        <td class="text-warning">{{ "%.2f"|format(s.contractor_commission) }}</td>
+                        <td>{{ "%.2f"|format(s.total_insurance) }}</td>
+                        <td>{{ "%.2f"|format(s.total_tax) }}</td>
+                        <td class="text-danger">{{ "%.2f"|format(s.total_advances) }}</td>
+                        <td class="text-primary fw-bold">{{ "%.2f"|format(s.net_amount) }}</td>
+                        <td>
+                            {% if s.status == 'draft' %}
+                            <span class="badge bg-warning">مسودة</span>
+                            {% elif s.status == 'posted' %}
+                            <span class="badge bg-success">مرحل</span>
+                            {% elif s.status == 'paid_to_contractor' %}
+                            <span class="badge bg-primary">تم الدفع للمتعهدة</span>
+                            {% elif s.status == 'distributed' %}
+                            <span class="badge bg-success">تم التوزيع</span>
+                            {% else %}
+                            <span class="badge bg-secondary">{{ s.status }}</span>
+                            {% endif %}
+                        </td>
+                        <td class="action-buttons">
+                            <!-- زر الترحيل -->
+                            {% if s.status == 'draft' %}
+                            <a href="{{ url_for('post_settlement', id=s.id) }}" class="btn btn-sm btn-success" onclick="return confirm('هل أنت متأكد من ترحيل هذا المستخلص؟')">
+                                <i class="fas fa-check"></i> ترحيل
+                            </a>
+                            <a href="{{ url_for('delete_settlement', id=s.id) }}" class="btn btn-sm btn-danger" onclick="return confirm('هل أنت متأكد من حذف هذا المستخلص؟')">
+                                <i class="fas fa-trash"></i> حذف
+                            </a>
+                            {% endif %}
+
+                            <!-- زر الدفع - شرط مباشر -->
+                            {% if s.status == 'posted' %}
+                            <a href="/settlement/payment/{{ s.id }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-money-bill-wave"></i> دفع
+                            </a>
+                            {% endif %}
+
+                            <!-- زر الطباعة -->
+                            <button class="btn btn-sm btn-info" onclick="printSettlement({{ s.id }})">
+                                <i class="fas fa-print"></i> طباعة
+                            </button>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="11" class="text-center">لا توجد مستخلصات</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+function printSettlement(id) {
+    window.open('/settlement/print/' + id, '_blank');
+}
+</script>
+{% endblock %}

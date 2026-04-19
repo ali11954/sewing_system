@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#E8B4B8">
+    <title>{{ app_name|default('نظام معمل الخياطات') }}</title>
+
+    <!-- Bootstrap 5 RTL -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- PWA Support -->
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="الخياطات">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+
+    <style>
+        * {
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        :root {
+            --primary-light: #FDF5F0;
+            --primary-soft: #F7E8E8;
+            --secondary-pink: #E8B4B8;
+            --secondary-lavender: #C9A9C6;
+            --text-dark: #5D4E46;
+            --border-soft: #F0D9D9;
+            --hover-pink: #D4A5A5;
+            --success-green: #A8C3A5;
+            --warning-orange: #E8B88A;
+            --danger-red: #D99E9E;
+        }
+
+        body {
+            background-color: var(--primary-light);
+            color: var(--text-dark);
+            font-family: 'Tajawal', sans-serif;
+            padding-bottom: 70px;
+        }
+
+        /* شريط التنقل */
+        .navbar {
+            background: linear-gradient(135deg, var(--secondary-pink), var(--secondary-lavender));
+            box-shadow: 0 2px 15px rgba(0,0,0,0.1);
+        }
+
+        .navbar-brand {
+            color: white !important;
+            font-weight: bold;
+            font-size: 1.5rem;
+        }
+
+        .nav-link {
+            color: white !important;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 10px;
+        }
+
+        /* البطاقات */
+        .card {
+            border-radius: 20px;
+            border: none;
+            background-color: white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.12);
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--primary-soft), white);
+            border-radius: 20px 20px 0 0 !important;
+            border-bottom: 2px solid var(--border-soft);
+            padding: 1rem 1.5rem;
+            font-weight: bold;
+            color: var(--text-dark);
+        }
+
+        /* الأزرار */
+        .btn-primary {
+            background-color: var(--secondary-pink);
+            border-color: var(--secondary-pink);
+            border-radius: 12px;
+            padding: 8px 20px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--hover-pink);
+            border-color: var(--hover-pink);
+            transform: scale(1.02);
+        }
+
+        .btn-success {
+            background-color: var(--success-green);
+            border-color: var(--success-green);
+            border-radius: 12px;
+        }
+
+        .btn-warning {
+            background-color: var(--warning-orange);
+            border-color: var(--warning-orange);
+        }
+
+        .btn-danger {
+            background-color: var(--danger-red);
+            border-color: var(--danger-red);
+        }
+
+        /* الجداول */
+        .table {
+            background-color: white;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .table thead th {
+            background-color: var(--primary-soft);
+            color: var(--text-dark);
+            border-bottom: 2px solid var(--border-soft);
+            font-weight: 600;
+        }
+
+        .table tbody tr:hover {
+            background-color: var(--primary-soft);
+        }
+
+        /* النماذج */
+        .form-control, .form-select {
+            border-radius: 12px;
+            border: 1px solid var(--border-soft);
+            padding: 10px 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: var(--secondary-pink);
+            box-shadow: 0 0 0 0.2rem rgba(232, 180, 184, 0.25);
+        }
+
+        /* الإحصائيات */
+        .stat-card {
+            background: linear-gradient(135deg, white, var(--primary-soft));
+            border-radius: 20px;
+            padding: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            color: var(--secondary-pink);
+        }
+
+        /* القائمة السفلية للجوال */
+        .mobile-bottom-nav {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            display: none;
+            justify-content: space-around;
+            padding: 10px 0;
+            box-shadow: 0 -2px 15px rgba(0,0,0,0.1);
+            z-index: 1000;
+        }
+
+        .mobile-nav-item {
+            text-align: center;
+            color: var(--text-dark);
+            text-decoration: none;
+            font-size: 12px;
+        }
+
+        .mobile-nav-item i {
+            font-size: 24px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .mobile-nav-item.active {
+            color: var(--secondary-pink);
+        }
+
+        @media (max-width: 768px) {
+            .mobile-bottom-nav {
+                display: flex;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            body {
+                padding-bottom: 70px;
+            }
+        }
+
+        /* الرسائل */
+        .alert {
+            border-radius: 12px;
+            border: none;
+        }
+
+        /* الشريط الجانبي */
+        .sidebar {
+            background-color: white;
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* التحميل */
+        .loader {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 9999;
+        }
+
+        /* التذييل */
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: var(--text-dark);
+            font-size: 0.9rem;
+        }
+
+        /* بطاقة الإنتاج */
+        .production-card {
+            background: linear-gradient(135deg, white, var(--primary-soft));
+            border-right: 4px solid var(--secondary-pink);
+        }
+
+        /* أزرار الإجراءات */
+        .action-buttons .btn {
+            margin: 0 2px;
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        /* شارات */
+        .badge {
+            padding: 8px 12px;
+            border-radius: 20px;
+        }
+
+        .badge-success {
+            background-color: var(--success-green);
+        }
+
+        /* أنيميشن */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease;
+        }
+
+        /* طباعة */
+        @media print {
+            .no-print {
+                display: none;
+            }
+            body {
+                background-color: white;
+            }
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<!-- شريط التنقل العلوي -->
+<nav class="navbar navbar-expand-lg navbar-dark no-print">
+    <div class="container">
+        <a class="navbar-brand" href="{{ url_for('dashboard') }}">
+            <i class="fas fa-tshirt"></i> نظام معمل الخياطات
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('dashboard') }}">
+                        <i class="fas fa-chart-line"></i> الرئيسية
+                    </a>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="fas fa-cogs"></i> الإنتاج
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ url_for('production_list') }}">عرض الإنتاج</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('add_production') }}">إضافة إنتاج</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="fas fa-industry"></i> إدارة
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ url_for('machines_list') }}">المكائن</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('bag_types_list') }}">أنواع الأكياس</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('advances_list') }}">السلف</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="{{ url_for('workers_report') }}">
+                            <i class="fas fa-chalkboard-user"></i> تقرير الخياطات
+                        </a></li>
+                    </ul>
+                </li>
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" data-bs-toggle="dropdown">
+                        <i class="fas fa-calculator"></i> المحاسبة
+                    </a>
+                    <ul class="dropdown-menu">
+                        <li><a class="dropdown-item" href="{{ url_for('accounts_list') }}">الحسابات</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('journal_entries') }}">القيود اليومية</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('trial_balance') }}">ميزان المراجعة</a></li>
+                        <li><a class="dropdown-item" href="{{ url_for('income_statement') }}">قائمة الدخل</a></li>
+                    </ul>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('settlements_list') }}">
+                        <i class="fas fa-file-invoice"></i> المستخلصات
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('settings') }}">
+                        <i class="fas fa-sliders-h"></i> الإعدادات
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="{{ url_for('logout') }}">
+                        <i class="fas fa-sign-out-alt"></i> خروج
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<!-- القائمة السفلية للجوال -->
+<div class="mobile-bottom-nav no-print">
+    <a href="{{ url_for('dashboard') }}" class="mobile-nav-item">
+        <i class="fas fa-chart-line"></i>
+        <span>الرئيسية</span>
+    </a>
+    <a href="{{ url_for('workers_report') }}" class="mobile-nav-item">
+        <i class="fas fa-chalkboard-user"></i>
+        <span>الخياطات</span>
+    </a>
+    <a href="{{ url_for('production_list') }}" class="mobile-nav-item">
+        <i class="fas fa-boxes"></i>
+        <span>الإنتاج</span>
+    </a>
+    <a href="{{ url_for('add_production') }}" class="mobile-nav-item">
+        <i class="fas fa-plus-circle"></i>
+        <span>إضافة</span>
+    </a>
+    <a href="{{ url_for('advances_list') }}" class="mobile-nav-item">
+        <i class="fas fa-money-bill"></i>
+        <span>السلف</span>
+    </a>
+    <a href="{{ url_for('settlements_list') }}" class="mobile-nav-item">
+        <i class="fas fa-file-invoice"></i>
+        <span>المستخلصات</span>
+    </a>
+</div>
+
+<!-- المحتوى الرئيسي -->
+<div class="container mt-4 fade-in">
+    <!-- رسائل فلاش -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+                    <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <!-- عنوان الصفحة -->
+    {% block page_header %}
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-{{ page_icon|default('home') }}"></i> {{ page_title|default('لوحة التحكم') }}</h2>
+        {% block header_buttons %}{% endblock %}
+    </div>
+    {% endblock %}
+
+    <!-- المحتوى -->
+    {% block content %}{% endblock %}
+</div>
+
+<!-- مؤشر التحميل -->
+<div class="loader no-print">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">جاري التحميل...</span>
+    </div>
+</div>
+
+<!-- التذييل -->
+<footer class="footer no-print">
+    <div class="container">
+        <hr>
+        <p class="mb-0">© 2024 نظام معمل الخياطات - جميع الحقوق محفوظة</p>
+    </div>
+</footer>
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+
+<script>
+    // إظهار مؤشر التحميل عند إرسال النماذج
+    document.querySelectorAll('form').forEach(form => {
+        form.addEventListener('submit', function() {
+            document.querySelector('.loader').style.display = 'block';
+        });
+    });
+
+    // تأكيد الحذف
+    function confirmDelete(message) {
+        return confirm(message || 'هل أنت متأكد من الحذف؟');
+    }
+
+    // تنسيق الأرقام
+    function formatNumber(num) {
+        return new Intl.NumberFormat('ar-EG').format(num);
+    }
+
+    // تنسيق العملة
+    function formatCurrency(amount) {
+        return formatNumber(amount) + ' ريال';
+    }
+
+    // تحديث الوقت
+    function updateDateTime() {
+        const now = new Date();
+        const options = { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' };
+        const datetimeEl = document.getElementById('current-datetime');
+        if (datetimeEl) {
+            datetimeEl.textContent = now.toLocaleDateString('ar-EG', options);
+        }
+    }
+    setInterval(updateDateTime, 1000);
+    updateDateTime();
+
+    // تفعيل الأداة提示
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl)
+    })
+</script>
+
+{% block extra_js %}{% endblock %}
+</body>
+</html>

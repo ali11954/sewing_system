@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-boxes"></i> إدارة الإنتاج</h2>
+    </div>
+    <div class="col-auto">
+        <a href="{{ url_for('add_production') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> إضافة إنتاج جديد
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <!-- فلتر البحث -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <input type="text" id="searchInput" class="form-control" placeholder="بحث...">
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover" id="productionTable">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>التاريخ</th>
+                        <th>المكينة</th>
+                        <th>نوع الكيس</th>
+                        <th>الكمية</th>
+                        <th>سعر الكيس</th>
+                        <th>الإجمالي</th>
+                        <th>العاملة</th>
+                        <th>النوع</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for prod in productions %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ prod.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ prod.machine.name if prod.machine else '-' }}</td>
+                        <td>{{ prod.bag_type.full_name if prod.bag_type else '-' }}</td>
+                        <td>{{ prod.quantity }}</td>
+                        <td>{{ "%.2f"|format(prod.bag_type.price_per_bag) if prod.bag_type else '-' }}</td>
+                        <td class="text-success">{{ "%.2f"|format(prod.total_amount) }}</td>
+                        <td>{{ prod.worker_name or '-' }}</td>
+                        <td>
+                            {% if prod.is_temporary %}
+                            <span class="badge bg-warning">مؤقتة</span>
+                            {% else %}
+                            <span class="badge bg-info">دائمة</span>
+                            {% endif %}
+                        </td>
+                        <td class="action-buttons">
+                            <a href="{{ url_for('edit_production', id=prod.id) }}" class="btn btn-sm btn-warning">
+                                <i class="fas fa-edit"></i>
+                            </a>
+                            <a href="{{ url_for('delete_production', id=prod.id) }}"
+                               class="btn btn-sm btn-danger"
+                               onclick="return confirmDelete('هل أنت متأكد من حذف هذا الإنتاج؟')">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="10" class="text-center">لا توجد بيانات</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <th colspan="6" class="text-end">الإجمالي:</th>
+                        <th colspan="4">{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// بحث في الجدول
+document.getElementById('searchInput').addEventListener('keyup', function() {
+    const searchText = this.value.toLowerCase();
+    const tableRows = document.querySelectorAll('#productionTable tbody tr');
+
+    tableRows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        row.style.display = text.includes(searchText) ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

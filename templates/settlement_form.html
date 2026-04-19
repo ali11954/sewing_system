@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-file-invoice"></i> إنشاء مستخلص جديد</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" id="settlementForm">
+                    <div class="mb-3">
+                        <label class="form-label">نوع المستخلص</label>
+                        <select name="settlement_type" class="form-select" required id="settlementType">
+                            <option value="weekly">أسبوعي</option>
+                            <option value="monthly">شهري</option>
+                            <option value="custom">فترة مخصصة</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ البداية</label>
+                        <input type="date" name="start_date" class="form-control" required id="startDate">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">تاريخ النهاية</label>
+                        <input type="date" name="end_date" class="form-control" required id="endDate">
+                    </div>
+
+                    <!-- رسالة التحذير من التداخل -->
+                    <div id="overlapWarning" class="alert alert-warning" style="display: none;">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>تحذير:</strong> توجد مستخلصات سابقة تغطي هذه الفترة!
+                        <div id="overlapDetails"></div>
+                    </div>
+
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>ملاحظة:</strong> سيتم حساب المستخلص بناءً على:
+                        <ul class="mb-0 mt-2">
+                            <li>إجمالي الإنتاج في الفترة المحددة</li>
+                            <li>جميع السلف المسجلة في نفس الفترة</li>
+                            <li>النسب المحددة في الإعدادات (عمولة المتعهدة، تأمين، ضريبة)</li>
+                        </ul>
+                    </div>
+
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary px-5" id="submitBtn">
+                            <i class="fas fa-calculator"></i> حساب وإنشاء
+                        </button>
+                        <a href="{{ url_for('settlements_list') }}" class="btn btn-secondary px-5">
+                            <i class="fas fa-times"></i> إلغاء
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// تعبئة التواريخ تلقائياً
+const typeSelect = document.querySelector('#settlementType');
+const startDateInput = document.querySelector('#startDate');
+const endDateInput = document.querySelector('#endDate');
+const today = new Date();
+
+function setWeeklyDates() {
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay());
+    startDateInput.value = start.toISOString().split('T')[0];
+
+    const end = new Date(start);
+    end.setDate(start.getDate() + 6);
+    endDateInput.value = end.toISOString().split('T')[0];
+
+    // التحقق من التداخل بعد تعيين التواريخ
+    checkOverlap();
+}
+
+function setMonthlyDates() {
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    startDateInput.value = start.toISOString().split('T')[0];
+
+    const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    endDateInput.value = end.toISOString().split('T')[0];
+
+    // التحقق من التداخل بعد تعيين التواريخ
+    checkOverlap();
+}
+
+typeSelect.addEventListener('change', function() {
+    if (this.value === 'weekly') {
+        setWeeklyDates();
+    } else if (this.value === 'monthly') {
+        setMonthlyDates();
+    }
+});
+
+// دالة التحقق من التداخل
+async function checkOverlap() {
+    const startDate = startDateInput.value;
+    const endDate = endDateInput.value;
+    const submitBtn = document.querySelector('#submitBtn');
+    const warningDiv = document.querySelector('#overlapWarning');
+    const overlapDetails = document.querySelector('#overlapDetails');
+
+    if (!startDate || !endDate) return;
+
+    try {
+        const response = await fetch(`/api/check-settlement-overlap?start=${startDate}&end=${endDate}`);
+        const data = await response.json();
+
+        if (data.has_overlap) {
+            warningDiv.style.display = 'block';
+            overlapDetails.innerHTML = `
+                <strong>الفترة المتداخلة:</strong> ${data.overlap_start} إلى ${data.overlap_end}<br>
+                <strong>حالة المستخلص:</strong> ${data.status}<br>
+                <small class="text-muted">لا يمكن إنشاء مستخلص جديد لهذه الفترة</small>
+            `;
+            submitBtn.disabled = true;
+            submitBtn.classList.add('btn-secondary');
+            submitBtn.classList.remove('btn-primary');
+        } else {
+            warningDiv.style.display = 'none';
+            submitBtn.disabled = false;
+            submitBtn.classList.add('btn-primary');
+            submitBtn.classList.remove('btn-secondary');
+        }
+    } catch (error) {
+        console.error('خطأ في التحقق:', error);
+    }
+}
+
+// الاستماع لتغيير التواريخ
+startDateInput.addEventListener('change', checkOverlap);
+endDateInput.addEventListener('change', checkOverlap);
+
+// تعيين القيم الافتراضية
+setWeeklyDates();
+</script>
+{% endblock %}

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+    <meta charset="UTF-8">
+    <title>تقرير الخياطات</title>
+    <style>
+        body { font-family: 'Tajawal', Arial, sans-serif; margin: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f2f2f2; }
+        .header { text-align: center; margin-bottom: 30px; }
+        .total { font-weight: bold; background-color: #f9f9f9; }
+        @media print {
+            .no-print { display: none; }
+            button { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h2>نظام معمل الخياطات</h2>
+        <h3>تقرير الخياطات</h3>
+        <p>الفترة: {{ start_date.strftime('%Y-%m-%d') }} إلى {{ end_date.strftime('%Y-%m-%d') }}</p>
+    </div>
+
+    {% for worker in workers %}
+    <div style="margin-bottom: 30px; page-break-inside: avoid;">
+        <h4>{{ worker.name }}</h4>
+        <table>
+            <thead>
+                <tr>
+                    <th>إجمالي الكمية</th>
+                    <th>إجمالي الأجور</th>
+                    <th>عمولة المتعهدة</th>
+                    <th>التأمينات</th>
+                    <th>الضرائب</th>
+                    <th>إجمالي السلف</th>
+                    <th>الصافي المستحق</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>{{ worker.total_quantity }}</td>
+                    <td>{{ "%.2f"|format(worker.total_amount) }}</td>
+                    <td>{{ "%.2f"|format(worker.contractor_commission) }}</td>
+                    <td>{{ "%.2f"|format(worker.insurance) }}</td>
+                    <td>{{ "%.2f"|format(worker.tax) }}</td>
+                    <td>{{ "%.2f"|format(worker.total_advances) }}</td>
+                    <td><strong>{{ "%.2f"|format(worker.net_amount) }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endfor %}
+
+    <div class="total" style="margin-top: 30px; padding: 10px; border-top: 2px solid #000;">
+        <h4>إجمالي المبالغ المستحقة: {{ "%.2f"|format(workers|sum(attribute='net_amount')) }} ريال</h4>
+    </div>
+
+    <div class="footer" style="margin-top: 50px; text-align: center;">
+        <p>تم الإنشاء بواسطة النظام في {{ datetime.now().strftime('%Y-%m-%d %H:%M:%S') }}</p>
+        <p>_________________________________</p>
+        <p>توقيع المحاسب</p>
+    </div>
+
+    <div class="no-print" style="text-align: center; margin-top: 20px;">
+        <button onclick="window.print()">طباعة</button>
+        <button onclick="window.close()">إغلاق</button>
+    </div>
+</body>
+</html>

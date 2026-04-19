@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block page_header %}{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card" id="receipt">
+            <div class="card-header text-center">
+                <h3><i class="fas fa-receipt"></i> إيصال دفع</h3>
+                <h4>نظام معمل الخياطات</h4>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <h5>إيصال استلام أجور</h5>
+                </div>
+
+                <table class="table table-borderless">
+                    <tr>
+                        <th width="40%">رقم الإيصال:</th>
+                        <td>{{ payment.receipt_number }}</td>
+                    </tr>
+                    <tr>
+                        <th>التاريخ:</th>
+                        <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
+                    </tr>
+                    <tr>
+                        <th>اسم الخياطة:</th>
+                        <td><strong>{{ payment.worker_name }}</strong></td>
+                    </tr>
+                    <tr>
+                        <th>نوع الخياطة:</th>
+                        <td>
+                            {% if payment.worker_type == 'permanent' %}
+                            <span class="badge bg-success">دائمة</span>
+                            {% else %}
+                            <span class="badge bg-warning">مؤقتة</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>المبلغ المستلم:</th>
+                        <td><h4 class="text-success">{{ "%.2f"|format(payment.amount) }} ريال</h4></td>
+                    </tr>
+                    <tr>
+                        <th>طريقة الدفع:</th>
+                        <td>
+                            {% if payment.payment_method == 'cash' %}نقدي
+                            {% elif payment.payment_method == 'bank' %}تحويل بنكي
+                            {% elif payment.payment_method == 'check' %}شيك
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>ملاحظات:</th>
+                        <td>{{ payment.notes or '-' }}</td>
+                    </tr>
+                </table>
+
+                <hr>
+
+                <div class="text-center mt-4">
+                    <div class="row">
+                        <div class="col">
+                            <p>توقيع الخياطة</p>
+                            <div style="height: 50px;">_________________</div>
+                        </div>
+                        <div class="col">
+                            <p>توقيع المحاسب</p>
+                            <div style="height: 50px;">_________________</div>
+                        </div>
+                    </div>
+                    <p class="text-muted mt-4">هذا الإيصال يؤكد استلام المبلغ المذكور أعلاه</p>
+                </div>
+            </div>
+            <div class="card-footer text-center">
+                <button class="btn btn-primary" onclick="window.print()">
+                    <i class="fas fa-print"></i> طباعة
+                </button>
+                <button class="btn btn-secondary" onclick="window.close()">
+                    <i class="fas fa-times"></i> إغلاق
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style media="print">
+    .no-print {
+        display: none;
+    }
+    .card {
+        border: none;
+    }
+    button {
+        display: none;
+    }
+</style>
+{% endblock %}

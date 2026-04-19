@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-receipt"></i> إيصالات دفع المستخلص رقم {{ settlement.id }}</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- معلومات المستخلص -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <i class="fas fa-info-circle"></i> معلومات المستخلص
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <strong>الفترة:</strong> {{ settlement.start_date.strftime('%Y-%m-%d') }} - {{ settlement.end_date.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>تاريخ الدفع:</strong> {{ payment.payment_date.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>طريقة الدفع:</strong>
+                        {% if payment.payment_method == 'cash' %}نقدي
+                        {% elif payment.payment_method == 'bank' %}تحويل بنكي
+                        {% elif payment.payment_method == 'check' %}شيك
+                        {% endif %}
+                    </div>
+                    <div class="col-md-3">
+                        <strong>رقم المرجع:</strong> {{ payment.reference_number or '-' }}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- إيصالات الخياطات -->
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-users"></i> إيصالات دفع الخياطات
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% for wp in payment.worker_payments %}
+                    <div class="col-md-4 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body text-center">
+                                <i class="fas fa-user-circle fa-3x mb-2" style="color: var(--secondary-pink);"></i>
+                                <h5>{{ wp.worker_name }}</h5>
+                                <p class="text-muted">
+                                    {% if wp.worker_type == 'permanent' %}
+                                    <span class="badge bg-success">دائمة</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">مؤقتة</span>
+                                    {% endif %}
+                                </p>
+                                <hr>
+                                <p><strong>المبلغ:</strong> <span class="text-success">{{ "%.2f"|format(wp.amount) }} ريال</span></p>
+                                <p><strong>طريقة الدفع:</strong>
+                                    {% if wp.payment_method == 'cash' %}نقدي
+                                    {% elif wp.payment_method == 'bank' %}تحويل بنكي
+                                    {% elif wp.payment_method == 'check' %}شيك
+                                    {% endif %}
+                                </p>
+                                <p><strong>رقم الإيصال:</strong> {{ wp.receipt_number or '-' }}</p>
+                                <p><strong>تاريخ الدفع:</strong> {{ wp.payment_date.strftime('%Y-%m-%d') }}</p>
+                                <hr>
+                                <div class="text-muted small">
+                                    <i class="fas fa-check-circle text-success"></i> تم التوقيع:
+                                    {% if wp.is_signed %}
+                                    {{ wp.signature_date.strftime('%Y-%m-%d') }}
+                                    {% else %}
+                                    لم يتم التوقيع بعد
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="card-footer text-center">
+                                <a href="{{ url_for('worker_payment_receipt', worker_payment_id=wp.id) }}"
+                                   class="btn btn-sm btn-primary" target="_blank">
+                                    <i class="fas fa-print"></i> طباعة الإيصال
+                                </a>
+                                {% if not wp.is_signed %}
+                                <button class="btn btn-sm btn-success" onclick="signReceipt({{ wp.id }})">
+                                    <i class="fas fa-signature"></i> توقيع
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button onclick="window.print()" class="btn btn-secondary">
+                <i class="fas fa-print"></i> طباعة جميع الإيصالات
+            </button>
+            <a href="{{ url_for('settlements_list') }}" class="btn btn-primary">
+                <i class="fas fa-arrow-right"></i> العودة للمستخلصات
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+function signReceipt(workerPaymentId) {
+    if (confirm('هل أنت متأكد من توقيع الخياطة على استلام المبلغ؟')) {
+        fetch(`/worker_payment/sign/${workerPaymentId}`, {
+            method: 'POST'
+        }).then(response => {
+            if (response.ok) {
+                alert('تم تسجيل التوقيع بنجاح');
+                location.reload();
+            } else {
+                alert('حدث خطأ في تسجيل التوقيع');
+            }
+        });
+    }
+}
+</script>
+{% endblock %}

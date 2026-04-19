@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-chart-line"></i> دليل الحسابات</h2>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>رقم الحساب</th>
+                        <th>اسم الحساب</th>
+                        <th>نوع الحساب</th>
+                        <th>الرصيد الحالي</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for acc in accounts %}
+                    <tr>
+                        <td><code>{{ acc.account_number }}</code></td>
+                        <td>{{ acc.account_name }}</td>
+                        <td>{{ acc.account_type_ar }}</td>
+                        <td class="{% if acc.account_type in ['asset', 'expense'] %}text-success{% else %}text-danger{% endif %}">
+                            {{ "%.2f"|format(acc.balance) }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

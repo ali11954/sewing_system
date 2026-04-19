@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<h2><i class="fas fa-sliders-h"></i> إعدادات النظام</h2>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-percent"></i> النسب والخصومات
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i class="fas fa-user-tie"></i> نسبة عمولة المتعهدة (%)
+                        </label>
+                        <input type="number" step="0.01" name="contractor_percentage"
+                               class="form-control" value="{{ settings.contractor_percentage if settings else 0 }}">
+                        <small class="text-muted">النسبة المئوية من إجمالي الإنتاج</small>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i class="fas fa-shield-alt"></i> التأمينات
+                        </label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" name="insurance_amount"
+                                   class="form-control" value="{{ settings.insurance_amount if settings else 0 }}">
+                            <select name="insurance_type" class="form-select" style="width: 120px;">
+                                <option value="percentage" {% if settings and settings.insurance_type == 'percentage' %}selected{% endif %}>
+                                    نسبة %
+                                </option>
+                                <option value="fixed" {% if settings and settings.insurance_type == 'fixed' %}selected{% endif %}>
+                                    مبلغ ثابت
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i class="fas fa-landmark"></i> الضرائب
+                        </label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" name="tax_amount"
+                                   class="form-control" value="{{ settings.tax_amount if settings else 0 }}">
+                            <select name="tax_type" class="form-select" style="width: 120px;">
+                                <option value="percentage" {% if settings and settings.tax_type == 'percentage' %}selected{% endif %}>
+                                    نسبة %
+                                </option>
+                                <option value="fixed" {% if settings and settings.tax_type == 'fixed' %}selected{% endif %}>
+                                    مبلغ ثابت
+                                </option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="alert alert-warning">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>تنبيه:</strong> تغيير هذه الإعدادات سيؤثر على جميع المستخلصات المستقبلية فقط
+                    </div>
+
+                    <div class="text-center">
+                        <button type="submit" class="btn btn-primary px-5">
+                            <i class="fas fa-save"></i> حفظ الإعدادات
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

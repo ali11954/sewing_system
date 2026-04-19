@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row mb-4">
+    <div class="col">
+        <h2><i class="fas fa-chart-line"></i> لوحة التحكم</h2>
+        <p class="text-muted">مرحباً بك في نظام إدارة معمل الخياطات</p>
+    </div>
+    <div class="col-auto">
+        <div class="text-muted" id="current-datetime"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- بطاقات الإحصائيات -->
+<div class="row g-4 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <i class="fas fa-calendar-day fa-2x mb-2" style="color: var(--secondary-pink);"></i>
+            <div class="stat-number">{{ "%.2f"|format(stats.today_total) }}</div>
+            <div class="text-muted">إنتاج اليوم (ريال)</div>
+            <small class="text-success">{{ stats.today_count }} كيس</small>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <i class="fas fa-calendar-alt fa-2x mb-2" style="color: var(--secondary-lavender);"></i>
+            <div class="stat-number">{{ "%.2f"|format(stats.monthly_total) }}</div>
+            <div class="text-muted">إنتاج الشهر (ريال)</div>
+            <small class="text-success">{{ stats.monthly_count }} كيس</small>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <i class="fas fa-industry fa-2x mb-2" style="color: var(--success-green);"></i>
+            <div class="stat-number">{{ stats.active_machines }}</div>
+            <div class="text-muted">المكائن النشطة</div>
+        </div>
+    </div>
+
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <i class="fas fa-boxes fa-2x mb-2" style="color: var(--warning-orange);"></i>
+            <div class="stat-number">{{ stats.total_bag_types }}</div>
+            <div class="text-muted">أنواع الأكياس</div>
+        </div>
+    </div>
+</div>
+
+<!-- الرسم البياني -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-chart-bar"></i> إنتاج آخر 7 أيام
+            </div>
+            <div class="card-body">
+                <canvas id="productionChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <!-- آخر الإنتاج -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-clock"></i> آخر الإنتاج
+                <a href="{{ url_for('production_list') }}" class="btn btn-sm btn-primary float-start">عرض الكل</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>المكينة</th>
+                                <th>نوع الكيس</th>
+                                <th>الكمية</th>
+                                <th>المبلغ</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for prod in recent_production[:5] %}
+                            <tr>
+                                <td>{{ prod.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ prod.machine.name if prod.machine else '-' }}</td>
+                                <td>{{ prod.bag_type.full_name if prod.bag_type else '-' }}</td>
+                                <td>{{ prod.quantity }}</td>
+                                <td>{{ "%.2f"|format(prod.total_amount) }}</td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="5" class="text-center">لا توجد بيانات</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- آخر السلف -->
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-money-bill"></i> آخر السلف
+                <a href="{{ url_for('advances_list') }}" class="btn btn-sm btn-primary float-start">عرض الكل</a>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>العاملة</th>
+                                <th>المبلغ</th>
+                                <th>النوع</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for adv in recent_advances[:5] %}
+                            <tr>
+                                <td>{{ adv.date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ adv.worker_name }}</td>
+                                <td class="text-danger">{{ "%.2f"|format(adv.amount) }}</td>
+                                <td>
+                                    {% if adv.is_temporary %}
+                                    <span class="badge bg-warning">مؤقتة</span>
+                                    {% else %}
+                                    <span class="badge bg-info">دائمة</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="4" class="text-center">لا توجد سلف</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- أزرار سريعة -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-bolt"></i> إجراءات سريعة
+            </div>
+            <div class="card-body">
+                <div class="row g-3 text-center">
+                    <div class="col-md-3 col-6">
+                        <a href="{{ url_for('add_production') }}" class="btn btn-primary w-100 py-3">
+                            <i class="fas fa-plus-circle fa-2x d-block mb-2"></i>
+                            إضافة إنتاج
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <a href="{{ url_for('create_settlement') }}" class="btn btn-success w-100 py-3">
+                            <i class="fas fa-file-invoice fa-2x d-block mb-2"></i>
+                            إنشاء مستخلص
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <a href="{{ url_for('advances_list') }}" class="btn btn-warning w-100 py-3">
+                            <i class="fas fa-hand-holding-usd fa-2x d-block mb-2"></i>
+                            إدارة السلف
+                        </a>
+                    </div>
+                    <div class="col-md-3 col-6">
+                        <a href="{{ url_for('trial_balance') }}" class="btn btn-info w-100 py-3">
+                            <i class="fas fa-balance-scale fa-2x d-block mb-2"></i>
+                            ميزان المراجعة
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// رسم بياني للإنتاج
+fetch('/api/stats')
+    .then(response => response.json())
+    .then(data => {
+        const ctx = document.getElementById('productionChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: data.map(d => d.date),
+                datasets: [{
+                    label: 'الإنتاج (ريال)',
+                    data: data.map(d => d.amount),
+                    borderColor: 'var(--secondary-pink)',
+                    backgroundColor: 'rgba(232, 180, 184, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

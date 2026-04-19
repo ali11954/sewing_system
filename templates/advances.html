@@ -1,0 +1,194 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-hand-holding-usd"></i> إدارة السلف</h2>
+    </div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addAdvanceModal">
+            <i class="fas fa-plus"></i> إضافة سلفة جديدة
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="alert alert-info">
+            <i class="fas fa-info-circle"></i>
+            <strong>تنبيه:</strong> السلفة هي مبلغ يُصرف للعاملة قبل استحقاق الأجر.
+            يتم خصم السلف من أجور العاملة عند إعداد المستخلص.
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>التاريخ</th>
+                        <th>اسم العاملة</th>
+                        <th>المبلغ</th>
+                        <th>النوع</th>
+                        <th>ملاحظات</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for adv in advances %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ adv.date.strftime('%Y-%m-%d') }}</td>
+                        <td>{{ adv.worker_name }}</td>
+                        <td class="{% if adv.amount > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.2f"|format(adv.amount) }}
+                            {% if adv.amount < 0 %}
+                            <span class="badge bg-success ms-2">دفعة</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if adv.is_temporary %}
+                            <span class="badge bg-warning">مؤقتة</span>
+                            {% else %}
+                            <span class="badge bg-info">دائمة</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ adv.notes or '-' }}</td>
+                        <td>
+                            <a href="{{ url_for('delete_advance', id=adv.id) }}"
+                               class="btn btn-sm btn-danger"
+                               onclick="return confirmDelete('هل أنت متأكد من حذف هذه السلفة؟')">
+                                <i class="fas fa-trash"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center">لا توجد سلف</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="table-secondary">
+                        <th colspan="3" class="text-end">الإجمالي:</th>
+                        <th colspan="4">
+                            {% set total = advances|sum(attribute='amount') %}
+                            {% if total > 0 %}
+                            <span class="text-danger">{{ "%.2f"|format(total) }}</span>
+                            {% else %}
+                            <span class="text-success">{{ "%.2f"|format(total) }}</span>
+                            {% endif %}
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إضافة سلفة -->
+<div class="modal fade" id="addAdvanceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-hand-holding-usd"></i> إضافة سلفة جديدة
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_advance') }}" onsubmit="return validateAdvance()">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">التاريخ</label>
+                        <input type="date" name="date" class="form-control" required
+                               value="{{ datetime.now().strftime('%Y-%m-%d') if datetime else '' }}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم العاملة</label>
+                        <select name="worker_name" class="form-select" required>
+                            <option value="">اختر العاملة...</option>
+                            {% for machine in machines %}
+                            <option value="{{ machine.operator_name }}">{{ machine.operator_name }} ({{ machine.name }})</option>
+                            {% endfor %}
+                            {% for temp in temp_workers %}
+                            <option value="{{ temp }}">{{ temp }} (مؤقتة)</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">يمكنك أيضاً كتابة اسم عاملة جديدة</small>
+                        <input type="text" name="worker_name_new" class="form-control mt-2"
+                               placeholder="أو أدخل اسم عاملة جديدة">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">المبلغ (ريال)</label>
+                        <input type="number" step="0.01" name="amount" class="form-control"
+                               required min="0.01" id="amountInput">
+                        <small class="text-muted">السلفة تكون بقيمة موجبة (تُخصم من الأجر لاحقاً)</small>
+                    </div>
+                    <div class="form-check mb-3">
+                        <input type="checkbox" name="is_temporary" class="form-check-input" id="isTemporary">
+                        <label class="form-check-label" for="isTemporary">
+                            عاملة مؤقتة
+                        </label>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">ملاحظات</label>
+                        <textarea name="notes" class="form-control" rows="2"
+                                  placeholder="مثال: سلفة شهر رمضان، سلفة عاجلة..."></textarea>
+                    </div>
+
+                    <div class="alert alert-warning mt-3">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <strong>تنبيه:</strong> السلفة ستُخصم من أجور العاملة عند إعداد المستخلص.
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> حفظ السلفة
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function validateAdvance() {
+    const amount = document.getElementById('amountInput').value;
+    if (parseFloat(amount) <= 0) {
+        alert('المبلغ يجب أن يكون أكبر من صفر');
+        return false;
+    }
+
+    const workerSelect = document.querySelector('select[name="worker_name"]');
+    const workerNew = document.querySelector('input[name="worker_name_new"]');
+
+    if (!workerSelect.value && !workerNew.value) {
+        alert('الرجاء إدخال اسم العاملة');
+        return false;
+    }
+
+    // إذا تم إدخال اسم جديد، انسخه إلى الحقل الرئيسي
+    if (workerNew.value) {
+        workerSelect.value = workerNew.value;
+    }
+
+    return true;
+}
+
+// تحديث حقل الاسم عند تغيير القائمة المنسدلة
+document.querySelector('select[name="worker_name"]').addEventListener('change', function() {
+    if (this.value) {
+        document.querySelector('input[name="worker_name_new"]').value = '';
+    }
+});
+
+// تحديث القائمة المنسدلة عند كتابة اسم جديد
+document.querySelector('input[name="worker_name_new"]').addEventListener('input', function() {
+    if (this.value) {
+        document.querySelector('select[name="worker_name"]').value = '';
+    }
+});
+</script>
+{% endblock %}

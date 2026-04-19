@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-boxes"></i> أنواع الأكياس</h2>
+    </div>
+    <div class="col-auto">
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addBagTypeModal">
+            <i class="fas fa-plus"></i> إضافة نوع جديد
+        </button>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>المنتج</th>
+                        <th>الحجم</th>
+                        <th>سعر الكيس (ريال)</th>
+                        <th>الحالة</th>
+                        <th>الإجراءات</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for bt in bag_types %}
+                    <tr>
+                        <td>{{ loop.index }}</td>
+                        <td>{{ bt.name }}</td>
+                        <td>{{ bt.size }}</td>
+                        <td class="text-success">{{ "%.2f"|format(bt.price_per_bag) }}</td>
+                        <td>
+                            {% if bt.is_active %}
+                            <span class="badge bg-success">نشط</span>
+                            {% else %}
+                            <span class="badge bg-secondary">غير نشط</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-warning" onclick="editBagType({{ bt.id }})">
+                                <i class="fas fa-edit"></i> تعديل
+                            </button>
+                            <a href="{{ url_for('delete_bag_type', id=bt.id) }}"
+                               class="btn btn-sm btn-danger"
+                               onclick="return confirmDelete('هل أنت متأكد من حذف نوع الكيس {{ bt.full_name }}؟')">
+                                <i class="fas fa-trash"></i> حذف
+                            </a>
+                        </td>
+                     </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center">لا توجد أنواع</td>
+                     </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Modal إضافة نوع كيس -->
+<div class="modal fade" id="addBagTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">إضافة نوع كيس جديد</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('add_bag_type') }}">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنتج</label>
+                        <input type="text" name="name" class="form-control" required
+                               placeholder="مثال: سكر، رز، دقيق">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الحجم</label>
+                        <input type="text" name="size" class="form-control" required
+                               placeholder="مثال: 1كجم، 5كجم، 10كجم">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">سعر الكيس (ريال)</label>
+                        <input type="number" step="0.01" name="price_per_bag" class="form-control" required>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" class="form-check-input" checked>
+                        <label class="form-check-label">نشط</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Modal تعديل نوع كيس -->
+<div class="modal fade" id="editBagTypeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تعديل نوع الكيس</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editBagTypeForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">اسم المنتج</label>
+                        <input type="text" name="name" id="edit_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">الحجم</label>
+                        <input type="text" name="size" id="edit_size" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">سعر الكيس (ريال)</label>
+                        <input type="number" step="0.01" name="price_per_bag" id="edit_price" class="form-control" required>
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" id="edit_is_active" class="form-check-input">
+                        <label class="form-check-label">نشط</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التعديلات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function editBagType(id) {
+    // جلب بيانات نوع الكيس عبر API
+    fetch(`/api/bag_type/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('edit_name').value = data.name;
+                document.getElementById('edit_size').value = data.size;
+                document.getElementById('edit_price').value = data.price_per_bag;
+                document.getElementById('edit_is_active').checked = data.is_active;
+
+                // تعيين action النموذج
+                document.getElementById('editBagTypeForm').action = `/bag_types/edit/${id}`;
+
+                // فتح المودال
+                new bootstrap.Modal(document.getElementById('editBagTypeModal')).show();
+            } else {
+                alert('حدث خطأ في تحميل البيانات');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('حدث خطأ في الاتصال بالخادم');
+        });
+}
+</script>
+{% endblock %}
