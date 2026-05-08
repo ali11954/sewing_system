@@ -1,0 +1,513 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-chart-pie"></i> التقارير المتقدمة</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- نموذج اختيار التقرير -->
+<div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+        <i class="fas fa-sliders-h"></i> إعدادات التقرير
+    </div>
+    <div class="card-body">
+        <form id="reportForm" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label">نوع التقرير</label>
+                <select id="reportType" class="form-select" required>
+                    <option value="production_by_item">الإنتاج حسب نوع الكيس</option>
+                    <option value="production_by_worker">الإنتاج حسب العاملات</option>
+                    <option value="production_by_machine">الإنتاج حسب المكينة</option>
+                    <option value="settlements">المستخلصات</option>
+                    <option value="advances">السلف</option>
+                    <option value="financial">الملخص المالي</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">من تاريخ</label>
+                <input type="date" id="startDate" class="form-control" value="{{ start_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">إلى تاريخ</label>
+                <input type="date" id="endDate" class="form-control" value="{{ end_date }}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button type="button" class="btn btn-primary w-100" onclick="loadReport()">
+                    <i class="fas fa-search"></i> عرض التقرير
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- أزرار التصدير -->
+<div class="mb-3 text-end" id="exportButtons" style="display: none;">
+    <button class="btn btn-success" onclick="exportToExcel()">
+        <i class="fas fa-file-excel"></i> تصدير إلى Excel
+    </button>
+    <button class="btn btn-danger" onclick="exportToPDF()">
+        <i class="fas fa-file-pdf"></i> تصدير إلى PDF
+    </button>
+    <button class="btn btn-secondary" onclick="window.print()">
+        <i class="fas fa-print"></i> طباعة
+    </button>
+</div>
+
+<!-- عرض التقرير -->
+<div class="card" id="reportCard" style="display: none;">
+    <div class="card-header bg-success text-white">
+        <i class="fas fa-chart-line"></i> <span id="reportTitle">التقرير</span>
+    </div>
+    <div class="card-body" id="reportContent">
+        <!-- سيتم تحميل التقرير هنا -->
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status">
+                <span class="visually-hidden">جاري التحميل...</span>
+            </div>
+            <p class="mt-2">جاري تحميل التقرير...</p>
+        </div>
+    </div>
+    <div class="card-footer text-muted" id="reportFooter"></div>
+</div>
+
+<!-- مكتبات التصدير -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+let currentReportData = null;
+let currentReportType = '';
+
+// تحميل التقرير
+async function loadReport() {
+    const reportType = document.getElementById('reportType').value;
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+
+    document.getElementById('reportCard').style.display = 'block';
+    document.getElementById('reportContent').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">جاري تحميل التقرير...</p>
+        </div>
+    `;
+
+    try {
+        const response = await fetch(`/api/report/${reportType}?start=${startDate}&end=${endDate}`);
+        const data = await response.json();
+
+        if (data.success) {
+            currentReportData = data.data;
+            currentReportType = reportType;
+            renderReport(data.data, reportType);
+            document.getElementById('exportButtons').style.display = 'block';
+            document.getElementById('reportTitle').innerHTML = data.title;
+            document.getElementById('reportFooter').innerHTML = `تم الإنشاء: ${new Date().toLocaleString('ar-EG')}`;
+        } else {
+            document.getElementById('reportContent').innerHTML = `
+                <div class="alert alert-danger">${data.message || 'حدث خطأ في تحميل التقرير'}</div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('reportContent').innerHTML = `
+            <div class="alert alert-danger">حدث خطأ في الاتصال بالخادم</div>
+        `;
+    }
+}
+
+// عرض التقرير
+function renderReport(data, type) {
+    let html = '';
+
+    switch(type) {
+        case 'production_by_item':
+            html = renderProductionByItem(data);
+            break;
+        case 'production_by_worker':
+            html = renderProductionByWorker(data);
+            break;
+        case 'production_by_machine':
+            html = renderProductionByMachine(data);
+            break;
+        case 'settlements':
+            html = renderSettlements(data);
+            break;
+        case 'advances':
+            html = renderAdvances(data);
+            break;
+        case 'financial':
+            html = renderFinancial(data);
+            break;
+        default:
+            html = '<div class="alert alert-warning">نوع التقرير غير معروف</div>';
+    }
+
+    document.getElementById('reportContent').innerHTML = html;
+}
+
+// تقرير الإنتاج حسب نوع الكيس
+function renderProductionByItem(data) {
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportTable">
+                <thead class="table-primary">
+                    <tr>
+                        <th>#</th>
+                        <th>نوع الكيس</th>
+                        <th>الكمية</th>
+                        <th>الإجمالي (ريال)</th>
+                        <th>النسبة</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    data.items.forEach((item, index) => {
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${item.name}</td>
+                <td>${item.quantity.toLocaleString()}</td>
+                <td class="text-success">${item.amount.toFixed(2)}</td>
+                <td>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" style="width: ${item.percentage}%">${item.percentage}%</div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+                <tfoot class="table-secondary">
+                    <tr>
+                        <th colspan="2">الإجمالي</th>
+                        <th>${data.total_quantity.toLocaleString()}</th>
+                        <th>${data.total_amount.toFixed(2)}</th>
+                        <th>100%</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    return html;
+}
+
+// تقرير الإنتاج حسب العاملات
+function renderProductionByWorker(data) {
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportTable">
+                <thead class="table-primary">
+                    <tr>
+                        <th>#</th>
+                        <th>اسم العاملة</th>
+                        <th>النوع</th>
+                        <th>الكمية</th>
+                        <th>الإجمالي (ريال)</th>
+                        <th>الأجر (ريال)</th>
+                        <th>العمولة</th>
+                        <th>الصافي</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    data.workers.forEach((worker, index) => {
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${worker.name}</td>
+                <td><span class="badge bg-info">${worker.type}</span></td>
+                <td>${worker.quantity.toLocaleString()}</td>
+                <td class="text-success">${worker.amount.toFixed(2)}</td>
+                <td>${worker.wage.toFixed(2)}</td>
+                <td class="text-danger">${worker.commission.toFixed(2)}</td>
+                <td class="text-primary fw-bold">${worker.net.toFixed(2)}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+                <tfoot class="table-secondary">
+                    <tr>
+                        <th colspan="3">الإجمالي</th>
+                        <th>${data.total_quantity.toLocaleString()}</th>
+                        <th>${data.total_amount.toFixed(2)}</th>
+                        <th>${data.total_wage.toFixed(2)}</th>
+                        <th>${data.total_commission.toFixed(2)}</th>
+                        <th>${data.total_net.toFixed(2)}</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    return html;
+}
+
+// تقرير الإنتاج حسب المكينة
+function renderProductionByMachine(data) {
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportTable">
+                <thead class="table-primary">
+                    <tr>
+                        <th>#</th>
+                        <th>المكينة</th>
+                        <th>المشغلة</th>
+                        <th>الكمية</th>
+                        <th>الإجمالي (ريال)</th>
+                        <th>النسبة</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    data.machines.forEach((machine, index) => {
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${machine.name}</td>
+                <td>${machine.operator}</td>
+                <td>${machine.quantity.toLocaleString()}</td>
+                <td class="text-success">${machine.amount.toFixed(2)}</td>
+                <td>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" style="width: ${machine.percentage}%">${machine.percentage}%</div>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+                <tfoot class="table-secondary">
+                    <tr>
+                        <th colspan="2">الإجمالي</th>
+                        <th>${data.total_quantity.toLocaleString()}</th>
+                        <th>${data.total_amount.toFixed(2)}</th>
+                        <th>100%</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    return html;
+}
+
+// تقرير المستخلصات
+function renderSettlements(data) {
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportTable">
+                <thead class="table-primary">
+                    <tr>
+                        <th>#</th>
+                        <th>الفترة</th>
+                        <th>النوع</th>
+                        <th>إجمالي الإنتاج</th>
+                        <th>عمولة المتعهدة</th>
+                        <th>التأمين</th>
+                        <th>الضريبة</th>
+                        <th>السلف</th>
+                        <th>الصافي</th>
+                        <th>الحالة</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    data.settlements.forEach((s, index) => {
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${s.start_date} - ${s.end_date}</td>
+                <td>${s.type}</td>
+                <td class="text-success">${s.total_production.toFixed(2)}</td>
+                <td class="text-danger">${s.commission.toFixed(2)}</td>
+                <td>${s.insurance.toFixed(2)}</td>
+                <td>${s.tax.toFixed(2)}</td>
+                <td class="text-danger">${s.advances.toFixed(2)}</td>
+                <td class="text-primary fw-bold">${s.net.toFixed(2)}</td>
+                <td><span class="badge bg-info">${s.status}</span></td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+                <tfoot class="table-secondary">
+                    <tr>
+                        <th colspan="3">الإجمالي</th>
+                        <th>${data.total_production.toFixed(2)}</th>
+                        <th>${data.total_commission.toFixed(2)}</th>
+                        <th>${data.total_insurance.toFixed(2)}</th>
+                        <th>${data.total_tax.toFixed(2)}</th>
+                        <th>${data.total_advances.toFixed(2)}</th>
+                        <th>${data.total_net.toFixed(2)}</th>
+                        <th></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    return html;
+}
+
+// تقرير السلف
+function renderAdvances(data) {
+    let html = `
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover" id="reportTable">
+                <thead class="table-primary">
+                    <tr>
+                        <th>#</th>
+                        <th>التاريخ</th>
+                        <th>اسم العاملة</th>
+                        <th>المبلغ</th>
+                        <th>النوع</th>
+                        <th>ملاحظات</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    data.advances.forEach((adv, index) => {
+        html += `
+            <tr>
+                <td>${index + 1}</td>
+                <td>${adv.date}</td>
+                <td>${adv.worker_name}</td>
+                <td class="text-danger">${adv.amount.toFixed(2)}</td>
+                <td><span class="badge ${adv.is_temporary ? 'bg-warning' : 'bg-info'}">${adv.is_temporary ? 'مؤقتة' : 'دائمة'}</span></td>
+                <td>${adv.notes || '-'}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+                </tbody>
+                <tfoot class="table-secondary">
+                    <tr>
+                        <th colspan="3">الإجمالي</th>
+                        <th>${data.total_amount.toFixed(2)}</th>
+                        <th colspan="2"></th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    `;
+
+    return html;
+}
+
+// تقرير الملخص المالي
+function renderFinancial(data) {
+    let html = `
+        <div class="row">
+            <div class="col-md-6">
+                <div class="card bg-light mb-3">
+                    <div class="card-header bg-success text-white">الإيرادات</div>
+                    <div class="card-body">
+                        <h3 class="text-success">${data.revenue.toFixed(2)} ريال</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card bg-light mb-3">
+                    <div class="card-header bg-danger text-white">المصروفات</div>
+                    <div class="card-body">
+                        <h3 class="text-danger">${data.expenses.toFixed(2)} ريال</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header bg-primary text-white">تفاصيل المصروفات</div>
+            <div class="card-body">
+                <table class="table table-bordered">
+                    <tr>
+                        <th>أجور الخياطات</th>
+                        <td class="text-end">${data.wages.toFixed(2)} ريال</td>
+                    </tr>
+                    <tr>
+                        <th>عمولة المتعهدة</th>
+                        <td class="text-end text-danger">${data.commission.toFixed(2)} ريال</td>
+                    </tr>
+                    <tr>
+                        <th>التأمينات</th>
+                        <td class="text-end">${data.insurance.toFixed(2)} ريال</td>
+                    </tr>
+                    <tr>
+                        <th>الضرائب</th>
+                        <td class="text-end">${data.tax.toFixed(2)} ريال</td>
+                    </tr>
+                    <tr class="table-secondary">
+                        <th>إجمالي المصروفات</th>
+                        <td class="text-end fw-bold">${data.expenses.toFixed(2)} ريال</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header ${data.net_income >= 0 ? 'bg-success' : 'bg-danger'} text-white">
+                صافي الدخل
+            </div>
+            <div class="card-body text-center">
+                <h2 class="${data.net_income >= 0 ? 'text-success' : 'text-danger'}">${data.net_income.toFixed(2)} ريال</h2>
+                <p>${data.net_income >= 0 ? 'أرباح' : 'خسائر'}</p>
+            </div>
+        </div>
+    `;
+
+    return html;
+}
+
+// تصدير إلى Excel
+function exportToExcel() {
+    const table = document.getElementById('reportTable');
+    if (!table) {
+        alert('لا توجد بيانات للتصدير');
+        return;
+    }
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.table_to_sheet(table, { raw: true });
+    XLSX.utils.book_append_sheet(wb, ws, currentReportType);
+    XLSX.writeFile(wb, `${currentReportType}_${new Date().toISOString().slice(0,19)}.xlsx`);
+}
+
+// تصدير إلى PDF
+function exportToPDF() {
+    const element = document.getElementById('reportContent');
+    const opt = {
+        margin: [10, 10, 10, 10],
+        filename: `${currentReportType}_${new Date().toISOString().slice(0,19)}.pdf`,
+        image: { type: 'jpeg', quality: 0.98 },
+        html2canvas: { scale: 2, letterRendering: true },
+        jsPDF: { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+    html2pdf().set(opt).from(element).save();
+}
+
+// تحميل التقرير تلقائياً عند فتح الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    loadReport();
+});
+</script>
+{% endblock %}

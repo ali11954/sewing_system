@@ -6,9 +6,14 @@
         <h2><i class="fas fa-boxes"></i> إدارة الإنتاج</h2>
     </div>
     <div class="col-auto">
-        <a href="{{ url_for('add_production') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> إضافة إنتاج جديد
-        </a>
+        <div class="btn-group">
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#reportModal">
+                <i class="fas fa-chart-bar"></i> تقارير
+            </button>
+            <a href="{{ url_for('add_production') }}" class="btn btn-primary">
+                <i class="fas fa-plus"></i> إضافة إنتاج جديد
+            </a>
+        </div>
     </div>
 </div>
 {% endblock %}
@@ -20,6 +25,21 @@
         <div class="row mb-3">
             <div class="col-md-4">
                 <input type="text" id="searchInput" class="form-control" placeholder="بحث...">
+            </div>
+            <div class="col-md-3">
+                <input type="date" id="filterDate" class="form-control" placeholder="فلتر بالتاريخ">
+            </div>
+            <div class="col-md-3">
+                <select id="filterMachine" class="form-select">
+                    <option value="">كل المكائن</option>
+                    {% set machines_list = productions|map(attribute='machine')|selectattr('name')|map(attribute='name')|unique|list %}
+                    {% for m in machines_list %}
+                    <option value="{{ m }}">{{ m }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-secondary w-100" onclick="clearFilters()">مسح الفلتر</button>
             </div>
         </div>
 
@@ -34,14 +54,14 @@
                         <th>الكمية</th>
                         <th>سعر الكيس</th>
                         <th>الإجمالي</th>
-                        <th>العاملة</th>
-                        <th>النوع</th>
+                        <th>الخياطة الرئيسية</th>
+                        <th>المساعدة</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for prod in productions %}
-                    <tr>
+                    <tr data-date="{{ prod.date.strftime('%Y-%m-%d') }}" data-machine="{{ prod.machine.name if prod.machine else '' }}">
                         <td>{{ loop.index }}</td>
                         <td>{{ prod.date.strftime('%Y-%m-%d') }}</td>
                         <td>{{ prod.machine.name if prod.machine else '-' }}</td>
@@ -49,12 +69,14 @@
                         <td>{{ prod.quantity }}</td>
                         <td>{{ "%.2f"|format(prod.bag_type.price_per_bag) if prod.bag_type else '-' }}</td>
                         <td class="text-success">{{ "%.2f"|format(prod.total_amount) }}</td>
-                        <td>{{ prod.worker_name or '-' }}</td>
+                        <td>{{ prod.machine.operator_name if prod.machine else '-' }}</td>
                         <td>
-                            {% if prod.is_temporary %}
-                            <span class="badge bg-warning">مؤقتة</span>
+                            {% if prod.temporary_assistant %}
+                            <span class="badge bg-warning">{{ prod.temporary_assistant }} (مؤقتة)</span>
+                            {% elif prod.machine.assistant_name %}
+                            <span class="badge bg-info">{{ prod.machine.assistant_name }} (رسمية)</span>
                             {% else %}
-                            <span class="badge bg-info">دائمة</span>
+                            <span class="badge bg-secondary">بدون مساعدة</span>
                             {% endif %}
                         </td>
                         <td class="action-buttons">
@@ -76,7 +98,9 @@
                 </tbody>
                 <tfoot>
                     <tr class="table-secondary">
-                        <th colspan="6" class="text-end">الإجمالي:</th>
+                        <th colspan="4" class="text-end">الإجمالي:</th>
+                        <th id="totalQuantity">{{ "%.0f"|format(productions|sum(attribute='quantity')) }}</th>
+                        <th></th>
                         <th colspan="4">{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
                     </tr>
                 </tfoot>
@@ -85,16 +109,218 @@
     </div>
 </div>
 
+<!-- نافذة التقارير -->
+<div class="modal fade" id="reportModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-chart-bar"></i> التقارير التحليلية</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="reportTab" role="tablist">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#byItem" type="button">حسب نوع الكيس</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#byWorker" type="button">حسب العاملات</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#byMachine" type="button">حسب المكينة</button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3">
+                    <!-- تقرير حسب نوع الكيس -->
+                    <div class="tab-pane fade show active" id="byItem">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>نوع الكيس</th>
+                                        <th>الكمية</th>
+                                        <th>الإجمالي (ريال)</th>
+                                        <th>النسبة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% set items = {} %}
+                                    {% for prod in productions %}
+                                        {% set key = prod.bag_type.full_name if prod.bag_type else '-' %}
+                                        {% if items.update({key: {'quantity': items.get(key, {}).get('quantity', 0) + prod.quantity, 'amount': items.get(key, {}).get('amount', 0) + prod.total_amount}}) %}{% endif %}
+                                    {% endfor %}
+                                    {% set total_qty = productions|sum(attribute='quantity') %}
+                                    {% for name, data in items.items() %}
+                                    <tr>
+                                        <td>{{ name }}</td>
+                                        <td>{{ "%.0f"|format(data.quantity) }}</td>
+                                        <td class="text-success">{{ "%.2f"|format(data.amount) }}</td>
+                                        <td>{{ "%.1f"|format((data.quantity / total_qty * 100) if total_qty > 0 else 0) }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th>الإجمالي</th>
+                                        <th>{{ "%.0f"|format(total_qty) }}</th>
+                                        <th>{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
+                                        <th>100%</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- تقرير حسب العاملات -->
+                    <div class="tab-pane fade" id="byWorker">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>الخياطة الرئيسية</th>
+                                        <th>المساعدة</th>
+                                        <th>الكمية</th>
+                                        <th>الإجمالي (ريال)</th>
+                                        <th>النسبة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% set workers = {} %}
+                                    {% for prod in productions %}
+                                        {% set operator = prod.machine.operator_name if prod.machine else '-' %}
+                                        {% set assistant = prod.temporary_assistant if prod.temporary_assistant else (prod.machine.assistant_name if prod.machine else '-') %}
+                                        {% set key = operator ~ ' - ' ~ assistant %}
+                                        {% if workers.update({key: {'operator': operator, 'assistant': assistant, 'quantity': workers.get(key, {}).get('quantity', 0) + prod.quantity, 'amount': workers.get(key, {}).get('amount', 0) + prod.total_amount}}) %}{% endif %}
+                                    {% endfor %}
+                                    {% for key, data in workers.items() %}
+                                    <tr>
+                                        <td>{{ data.operator }}</td>
+                                        <td>{{ data.assistant }}</td>
+                                        <td>{{ "%.0f"|format(data.quantity) }}</td>
+                                        <td class="text-success">{{ "%.2f"|format(data.amount) }}</td>
+                                        <td>{{ "%.1f"|format((data.quantity / total_qty * 100) if total_qty > 0 else 0) }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th colspan="2">الإجمالي</th>
+                                        <th>{{ "%.0f"|format(total_qty) }}</th>
+                                        <th>{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
+                                        <th>100%</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- تقرير حسب المكينة -->
+                    <div class="tab-pane fade" id="byMachine">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th>المكينة</th>
+                                        <th>الخياطة الرئيسية</th>
+                                        <th>المساعدة</th>
+                                        <th>الكمية</th>
+                                        <th>الإجمالي (ريال)</th>
+                                        <th>النسبة</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% set machines_data = {} %}
+                                    {% for prod in productions %}
+                                        {% set machine_name = prod.machine.name if prod.machine else '-' %}
+                                        {% set operator = prod.machine.operator_name if prod.machine else '-' %}
+                                        {% set assistant = prod.temporary_assistant if prod.temporary_assistant else (prod.machine.assistant_name if prod.machine else '-') %}
+                                        {% set key = machine_name %}
+                                        {% if machines_data.update({key: {'operator': operator, 'assistant': assistant, 'quantity': machines_data.get(key, {}).get('quantity', 0) + prod.quantity, 'amount': machines_data.get(key, {}).get('amount', 0) + prod.total_amount}}) %}{% endif %}
+                                    {% endfor %}
+                                    {% for name, data in machines_data.items() %}
+                                    <tr>
+                                        <td>{{ name }}</td>
+                                        <td>{{ data.operator }}</td>
+                                        <td>{{ data.assistant }}</td>
+                                        <td>{{ "%.0f"|format(data.quantity) }}</td>
+                                        <td class="text-success">{{ "%.2f"|format(data.amount) }}</td>
+                                        <td>{{ "%.1f"|format((data.quantity / total_qty * 100) if total_qty > 0 else 0) }}%</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                                <tfoot class="table-secondary">
+                                    <tr>
+                                        <th colspan="3">الإجمالي</th>
+                                        <th>{{ "%.0f"|format(total_qty) }}</th>
+                                        <th>{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
+                                        <th>100%</th>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" data-bs-dismiss="modal">إغلاق</button>
+                <button class="btn btn-primary" onclick="window.print()"><i class="fas fa-print"></i> طباعة التقرير</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script>
 // بحث في الجدول
 document.getElementById('searchInput').addEventListener('keyup', function() {
-    const searchText = this.value.toLowerCase();
+    filterTable();
+});
+
+// فلتر التاريخ
+document.getElementById('filterDate').addEventListener('change', function() {
+    filterTable();
+});
+
+// فلتر المكينة
+document.getElementById('filterMachine').addEventListener('change', function() {
+    filterTable();
+});
+
+function filterTable() {
+    const searchText = document.getElementById('searchInput').value.toLowerCase();
+    const filterDate = document.getElementById('filterDate').value;
+    const filterMachine = document.getElementById('filterMachine').value;
     const tableRows = document.querySelectorAll('#productionTable tbody tr');
+    let totalQty = 0;
+    let totalAmount = 0;
 
     tableRows.forEach(row => {
         const text = row.textContent.toLowerCase();
-        row.style.display = text.includes(searchText) ? '' : 'none';
+        const rowDate = row.getAttribute('data-date');
+        const rowMachine = row.getAttribute('data-machine');
+
+        let show = text.includes(searchText);
+        if (filterDate && rowDate !== filterDate) show = false;
+        if (filterMachine && rowMachine !== filterMachine) show = false;
+
+        row.style.display = show ? '' : 'none';
+
+        if (show) {
+            const qtyCell = row.cells[4];
+            const amountCell = row.cells[6];
+            totalQty += parseInt(qtyCell.textContent) || 0;
+            totalAmount += parseFloat(amountCell.textContent) || 0;
+        }
     });
-});
+
+    document.getElementById('totalQuantity').textContent = totalQty.toFixed(0);
+    const totalAmountCell = document.querySelector('#productionTable tfoot th:last-child');
+    if (totalAmountCell) totalAmountCell.textContent = totalAmount.toFixed(2);
+}
+
+function clearFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('filterDate').value = '';
+    document.getElementById('filterMachine').value = '';
+    filterTable();
+}
 </script>
 {% endblock %}

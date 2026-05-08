@@ -18,8 +18,8 @@
     <div class="card-body">
         <div class="alert alert-info">
             <i class="fas fa-info-circle"></i>
-            <strong>تنبيه:</strong> السلفة هي مبلغ يُصرف للعاملة قبل استحقاق الأجر.
-            يتم خصم السلف من أجور العاملة عند إعداد المستخلص.
+            <strong>تنبيه:</strong> السلفة هي مبلغ يُصرف للعاملة (خياطة أو مساعدة) قبل استحقاق الأجر.
+            يتم خصم السلف من الأجور عند إعداد المستخلص.
         </div>
 
         <div class="table-responsive">
@@ -29,8 +29,9 @@
                         <th>#</th>
                         <th>التاريخ</th>
                         <th>اسم العاملة</th>
-                        <th>المبلغ</th>
                         <th>النوع</th>
+                        <th>الوظيفة</th>
+                        <th>المبلغ</th>
                         <th>ملاحظات</th>
                         <th>الإجراءات</th>
                     </tr>
@@ -41,17 +42,24 @@
                         <td>{{ loop.index }}</td>
                         <td>{{ adv.date.strftime('%Y-%m-%d') }}</td>
                         <td>{{ adv.worker_name }}</td>
-                        <td class="{% if adv.amount > 0 %}text-danger{% else %}text-success{% endif %}">
-                            {{ "%.2f"|format(adv.amount) }}
-                            {% if adv.amount < 0 %}
-                            <span class="badge bg-success ms-2">دفعة</span>
-                            {% endif %}
-                        </td>
                         <td>
                             {% if adv.is_temporary %}
                             <span class="badge bg-warning">مؤقتة</span>
                             {% else %}
                             <span class="badge bg-info">دائمة</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if 'مساعدة' in adv.worker_name or adv.worker_name in assistants %}
+                            <span class="badge bg-secondary">مساعدة</span>
+                            {% else %}
+                            <span class="badge bg-primary">خياطة</span>
+                            {% endif %}
+                        </td>
+                        <td class="{% if adv.amount > 0 %}text-danger{% else %}text-success{% endif %}">
+                            {{ "%.2f"|format(adv.amount) }}
+                            {% if adv.amount < 0 %}
+                            <span class="badge bg-success ms-2">دفعة</span>
                             {% endif %}
                         </td>
                         <td>{{ adv.notes or '-' }}</td>
@@ -65,14 +73,14 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="7" class="text-center">لا توجد سلف</td>
+                        <td colspan="8" class="text-center">لا توجد سلف</td>
                     </tr>
                     {% endfor %}
                 </tbody>
                 <tfoot>
                     <tr class="table-secondary">
-                        <th colspan="3" class="text-end">الإجمالي:</th>
-                        <th colspan="4">
+                        <th colspan="5" class="text-end">الإجمالي:</th>
+                        <th colspan="3">
                             {% set total = advances|sum(attribute='amount') %}
                             {% if total > 0 %}
                             <span class="text-danger">{{ "%.2f"|format(total) }}</span>
@@ -105,18 +113,31 @@
                                value="{{ datetime.now().strftime('%Y-%m-%d') if datetime else '' }}">
                     </div>
                     <div class="mb-3">
+                        <label class="form-label">نوع العاملة</label>
+                        <select id="workerType" class="form-select" onchange="updateWorkerList()">
+                            <option value="operator">خياطة رئيسية</option>
+                            <option value="assistant">مساعدة</option>
+                            <option value="temporary">عاملة مؤقتة</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
                         <label class="form-label">اسم العاملة</label>
-                        <select name="worker_name" class="form-select" required>
+                        <select name="worker_name" id="workerSelect" class="form-select" required>
                             <option value="">اختر العاملة...</option>
                             {% for machine in machines %}
-                            <option value="{{ machine.operator_name }}">{{ machine.operator_name }} ({{ machine.name }})</option>
+                            <option value="{{ machine.operator_name }}" data-type="operator">{{ machine.operator_name }} (خياطة - {{ machine.name }})</option>
+                            {% endfor %}
+                            {% for machine in machines %}
+                                {% if machine.assistant_name %}
+                                <option value="{{ machine.assistant_name }}" data-type="assistant">{{ machine.assistant_name }} (مساعدة - {{ machine.name }})</option>
+                                {% endif %}
                             {% endfor %}
                             {% for temp in temp_workers %}
-                            <option value="{{ temp }}">{{ temp }} (مؤقتة)</option>
+                            <option value="{{ temp }}" data-type="temporary">{{ temp }} (مؤقتة)</option>
                             {% endfor %}
                         </select>
                         <small class="text-muted">يمكنك أيضاً كتابة اسم عاملة جديدة</small>
-                        <input type="text" name="worker_name_new" class="form-control mt-2"
+                        <input type="text" name="worker_name_new" id="workerNameNew" class="form-control mt-2"
                                placeholder="أو أدخل اسم عاملة جديدة">
                     </div>
                     <div class="mb-3">
@@ -154,6 +175,39 @@
 </div>
 
 <script>
+// قائمة المساعدات
+const assistants = [
+    {% for machine in machines %}
+        {% if machine.assistant_name %}
+        "{{ machine.assistant_name }}",
+        {% endif %}
+    {% endfor %}
+];
+
+function updateWorkerList() {
+    const workerType = document.getElementById('workerType').value;
+    const workerSelect = document.getElementById('workerSelect');
+    const options = workerSelect.options;
+
+    for (let i = 0; i < options.length; i++) {
+        const option = options[i];
+        const dataType = option.getAttribute('data-type');
+        if (option.value === "") continue;
+
+        if (workerType === 'operator' && dataType === 'operator') {
+            option.style.display = '';
+        } else if (workerType === 'assistant' && dataType === 'assistant') {
+            option.style.display = '';
+        } else if (workerType === 'temporary' && dataType === 'temporary') {
+            option.style.display = '';
+        } else {
+            option.style.display = 'none';
+        }
+    }
+
+    workerSelect.value = '';
+}
+
 function validateAdvance() {
     const amount = document.getElementById('amountInput').value;
     if (parseFloat(amount) <= 0) {
@@ -161,8 +215,8 @@ function validateAdvance() {
         return false;
     }
 
-    const workerSelect = document.querySelector('select[name="worker_name"]');
-    const workerNew = document.querySelector('input[name="worker_name_new"]');
+    const workerSelect = document.getElementById('workerSelect');
+    const workerNew = document.getElementById('workerNameNew');
 
     if (!workerSelect.value && !workerNew.value) {
         alert('الرجاء إدخال اسم العاملة');
@@ -171,6 +225,12 @@ function validateAdvance() {
 
     // إذا تم إدخال اسم جديد، انسخه إلى الحقل الرئيسي
     if (workerNew.value) {
+        // إنشاء خيار جديد مؤقت
+        const newOption = document.createElement('option');
+        newOption.value = workerNew.value;
+        newOption.text = workerNew.value + ' (جديد)';
+        newOption.setAttribute('data-type', 'temporary');
+        workerSelect.appendChild(newOption);
         workerSelect.value = workerNew.value;
     }
 
@@ -178,17 +238,20 @@ function validateAdvance() {
 }
 
 // تحديث حقل الاسم عند تغيير القائمة المنسدلة
-document.querySelector('select[name="worker_name"]').addEventListener('change', function() {
+document.getElementById('workerSelect').addEventListener('change', function() {
     if (this.value) {
-        document.querySelector('input[name="worker_name_new"]').value = '';
+        document.getElementById('workerNameNew').value = '';
     }
 });
 
 // تحديث القائمة المنسدلة عند كتابة اسم جديد
-document.querySelector('input[name="worker_name_new"]').addEventListener('input', function() {
+document.getElementById('workerNameNew').addEventListener('input', function() {
     if (this.value) {
-        document.querySelector('select[name="worker_name"]').value = '';
+        document.getElementById('workerSelect').value = '';
     }
 });
+
+// تهيئة القائمة
+updateWorkerList();
 </script>
 {% endblock %}

@@ -6,10 +6,11 @@
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-6">
+    <div class="col-md-8">
         <div class="card">
             <div class="card-body">
                 <form method="POST" id="settlementForm">
+                    <!-- نوع المستخلص -->
                     <div class="mb-3">
                         <label class="form-label">نوع المستخلص</label>
                         <select name="settlement_type" class="form-select" required id="settlementType">
@@ -19,31 +20,74 @@
                         </select>
                     </div>
 
+                    <!-- اختيار الأصناف -->
                     <div class="mb-3">
-                        <label class="form-label">تاريخ البداية</label>
-                        <input type="date" name="start_date" class="form-control" required id="startDate">
+                        <label class="form-label">
+                            <i class="fas fa-boxes"></i> أنواع الأكياس المشمولة
+                        </label>
+                        <select name="bag_type_ids" class="form-select" multiple size="5" id="bagTypeSelect" style="height: 150px;">
+                            {% for bt in bag_types %}
+                            <option value="{{ bt.id }}">
+                                {{ bt.full_name }} ({{ "%.2f"|format(bt.price_per_bag) }} ريال)
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">
+                            <i class="fas fa-info-circle"></i> يمكنك اختيار عدة أصناف (Ctrl + Click للإختيار المتعدد)
+                        </small>
                     </div>
 
-                    <div class="mb-3">
-                        <label class="form-label">تاريخ النهاية</label>
-                        <input type="date" name="end_date" class="form-control" required id="endDate">
+                    <!-- تواريخ الفترة -->
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ البداية</label>
+                            <input type="date" name="start_date" class="form-control" required id="startDate">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">تاريخ النهاية</label>
+                            <input type="date" name="end_date" class="form-control" required id="endDate">
+                        </div>
                     </div>
 
-                    <!-- رسالة التحذير من التداخل -->
+                    <!-- سلفة المتعهدة -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="fas fa-hand-holding-usd"></i> سلفة المتعهدة (من الشركة)
+                        </label>
+                        <input type="number" step="0.01" name="advance_to_contractor" class="form-control" id="advanceAmount" value="0">
+                        <small class="text-muted">المبلغ الذي تم صرفه للمتعهدة كسلفة على أجورها</small>
+                    </div>
+
+                    <!-- رسالة تحذير التداخل -->
                     <div id="overlapWarning" class="alert alert-warning" style="display: none;">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>تحذير:</strong> توجد مستخلصات سابقة تغطي هذه الفترة!
+                        <strong>تحذير:</strong> توجد مستخلصات سابقة لنفس الفترة!
                         <div id="overlapDetails"></div>
                     </div>
 
+                    <!-- ملخص الفترة -->
                     <div class="alert alert-info">
                         <i class="fas fa-info-circle"></i>
                         <strong>ملاحظة:</strong> سيتم حساب المستخلص بناءً على:
                         <ul class="mb-0 mt-2">
                             <li>إجمالي الإنتاج في الفترة المحددة</li>
-                            <li>جميع السلف المسجلة في نفس الفترة</li>
-                            <li>النسب المحددة في الإعدادات (عمولة المتعهدة، تأمين، ضريبة)</li>
+                            <li>الأصناف المختارة فقط</li>
+                            <li>سلفة المتعهدة (تخصم من المبلغ المستحق)</li>
+                            <li>النسب المحددة في الإعدادات</li>
                         </ul>
+                    </div>
+
+                    <!-- زر المعاينة -->
+                    <div class="text-center mb-3">
+                        <button type="button" class="btn btn-info" onclick="previewSettlement()">
+                            <i class="fas fa-eye"></i> معاينة الحساب
+                        </button>
+                    </div>
+
+                    <!-- نتائج المعاينة -->
+                    <div id="previewResult" class="alert alert-secondary" style="display: none;">
+                        <h6><i class="fas fa-calculator"></i> نتيجة المعاينة:</h6>
+                        <div id="previewContent"></div>
                     </div>
 
                     <div class="text-center">
@@ -71,41 +115,33 @@ function setWeeklyDates() {
     const start = new Date(today);
     start.setDate(today.getDate() - today.getDay());
     startDateInput.value = start.toISOString().split('T')[0];
-
     const end = new Date(start);
     end.setDate(start.getDate() + 6);
     endDateInput.value = end.toISOString().split('T')[0];
-
-    // التحقق من التداخل بعد تعيين التواريخ
     checkOverlap();
 }
 
 function setMonthlyDates() {
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
     startDateInput.value = start.toISOString().split('T')[0];
-
     const end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
     endDateInput.value = end.toISOString().split('T')[0];
-
-    // التحقق من التداخل بعد تعيين التواريخ
     checkOverlap();
 }
 
 typeSelect.addEventListener('change', function() {
-    if (this.value === 'weekly') {
-        setWeeklyDates();
-    } else if (this.value === 'monthly') {
-        setMonthlyDates();
-    }
+    if (this.value === 'weekly') setWeeklyDates();
+    else if (this.value === 'monthly') setMonthlyDates();
 });
 
-// دالة التحقق من التداخل
+startDateInput.addEventListener('change', checkOverlap);
+endDateInput.addEventListener('change', checkOverlap);
+
 async function checkOverlap() {
     const startDate = startDateInput.value;
     const endDate = endDateInput.value;
-    const submitBtn = document.querySelector('#submitBtn');
-    const warningDiv = document.querySelector('#overlapWarning');
-    const overlapDetails = document.querySelector('#overlapDetails');
+    const warningDiv = document.getElementById('overlapWarning');
+    const overlapDetails = document.getElementById('overlapDetails');
 
     if (!startDate || !endDate) return;
 
@@ -115,30 +151,60 @@ async function checkOverlap() {
 
         if (data.has_overlap) {
             warningDiv.style.display = 'block';
-            overlapDetails.innerHTML = `
-                <strong>الفترة المتداخلة:</strong> ${data.overlap_start} إلى ${data.overlap_end}<br>
-                <strong>حالة المستخلص:</strong> ${data.status}<br>
-                <small class="text-muted">لا يمكن إنشاء مستخلص جديد لهذه الفترة</small>
-            `;
-            submitBtn.disabled = true;
-            submitBtn.classList.add('btn-secondary');
-            submitBtn.classList.remove('btn-primary');
+            overlapDetails.innerHTML = `فترة متداخلة من ${data.overlap_start} إلى ${data.overlap_end}`;
         } else {
             warningDiv.style.display = 'none';
-            submitBtn.disabled = false;
-            submitBtn.classList.add('btn-primary');
-            submitBtn.classList.remove('btn-secondary');
         }
     } catch (error) {
-        console.error('خطأ في التحقق:', error);
+        console.error('Error:', error);
     }
 }
 
-// الاستماع لتغيير التواريخ
-startDateInput.addEventListener('change', checkOverlap);
-endDateInput.addEventListener('change', checkOverlap);
+async function previewSettlement() {
+    const startDate = startDateInput.value;
+    const endDate = endDateInput.value;
+    const selectedBagIds = Array.from(document.getElementById('bagTypeSelect').selectedOptions).map(opt => opt.value);
+    const advanceAmount = document.getElementById('advanceAmount').value;
 
-// تعيين القيم الافتراضية
+    if (!startDate || !endDate || selectedBagIds.length === 0) {
+        alert('الرجاء اختيار الفترة وأنواع الأكياس');
+        return;
+    }
+
+    const previewDiv = document.getElementById('previewResult');
+    const previewContent = document.getElementById('previewContent');
+    previewDiv.style.display = 'block';
+    previewContent.innerHTML = '<div class="text-center"><div class="spinner-border spinner-border-sm"></div> جاري الحساب...</div>';
+
+    try {
+        const response = await fetch(`/api/preview-settlement?start=${startDate}&end=${endDate}&bag_ids=${selectedBagIds.join(',')}&advance=${advanceAmount}`);
+        const data = await response.json();
+
+        if (data.success) {
+            previewContent.innerHTML = `
+                <table class="table table-sm">
+                    <tr><th>إجمالي الإنتاج:</th><td class="text-success">${data.total_production.toFixed(2)} ريال</td></tr>
+                    <tr><th>إجمالي الكمية:</th><td>${data.total_quantity.toLocaleString()} كيس</td></tr>
+                    <tr><th>عمولة المتعهدة (10%):</th><td class="text-danger">- ${data.commission.toFixed(2)} ريال</td></tr>
+                    <tr><th>التأمينات (5%):</th><td class="text-danger">- ${data.insurance.toFixed(2)} ريال</td></tr>
+                    <tr><th>الضرائب (5%):</th><td class="text-danger">- ${data.tax.toFixed(2)} ريال</td></tr>
+                    <tr><th>سلفة المتعهدة:</th><td class="text-danger">- ${data.advance.toFixed(2)} ريال</td></tr>
+                    <tr class="table-primary"><th>الصافي المستحق للمتعهدة:</th><td class="fw-bold">${data.net.toFixed(2)} ريال</td></tr>
+                </table>
+                <hr>
+                <div class="text-muted small">
+                    <i class="fas fa-boxes"></i> الأصناف المشمولة: ${data.bag_types_count} نوع<br>
+                    <i class="fas fa-calendar"></i> الفترة: ${startDate} إلى ${endDate}
+                </div>
+            `;
+        } else {
+            previewContent.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+        }
+    } catch (error) {
+        previewContent.innerHTML = '<div class="alert alert-danger">حدث خطأ في المعاينة</div>';
+    }
+}
+
 setWeeklyDates();
 </script>
 {% endblock %}

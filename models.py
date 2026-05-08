@@ -31,7 +31,9 @@ class Machine(db.Model):
     code = db.Column(db.String(20), unique=True)
     name = db.Column(db.String(50))
     operator_name = db.Column(db.String(100))
+    assistant_name = db.Column(db.String(100))  # اسم المساعدة الرسمية
     operator_phone = db.Column(db.String(20))
+    assistant_phone = db.Column(db.String(20))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.now)
 
@@ -73,6 +75,7 @@ class Production(db.Model):
     bag_type_id = db.Column(db.Integer, db.ForeignKey('bag_types.id'))
     quantity = db.Column(db.Integer, nullable=False)
     worker_name = db.Column(db.String(100))
+    temporary_assistant = db.Column(db.String(100))  # مساعدة مؤقتة (إذا وجدت)
     is_temporary = db.Column(db.Boolean, default=False)
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -217,12 +220,12 @@ class Settlement(db.Model):
     end_date = db.Column(db.Date, nullable=False)
     settlement_type = db.Column(db.String(20))
     total_production_amount = db.Column(db.Float, default=0.0)
-    contractor_commission = db.Column(db.Float, default=0.0)
+    total_quantity = db.Column(db.Float, default=0.0)  # إجمالي الكمية
     total_insurance = db.Column(db.Float, default=0.0)
     total_tax = db.Column(db.Float, default=0.0)
-    total_advances = db.Column(db.Float, default=0.0)
+    advance_to_contractor = db.Column(db.Float, default=0.0)  # سلفة المتعهدة
     net_amount = db.Column(db.Float, default=0.0)
-    status = db.Column(db.String(20), default='draft')  # draft, posted, paid_to_contractor, distributed
+    status = db.Column(db.String(20), default='draft')
     created_date = db.Column(db.Date, default=datetime.now)
     created_by = db.Column(db.String(50))
     journal_entry_id = db.Column(db.Integer, db.ForeignKey('journal_entries.id'))
@@ -235,14 +238,25 @@ class Settlement(db.Model):
         return f'<Settlement {self.period_text}>'
 
 
+class SettlementBag(db.Model):
+    """ربط المستخلص بأنواع الأكياس"""
+    __tablename__ = 'settlement_bags'
+
+    id = db.Column(db.Integer, primary_key=True)
+    settlement_id = db.Column(db.Integer, db.ForeignKey('settlements.id'))
+    bag_type_id = db.Column(db.Integer, db.ForeignKey('bag_types.id'))
+
+    settlement = db.relationship('Settlement', backref='settlement_bags')
+    bag_type = db.relationship('BagType')
+
 # ==================== إعدادات النظام ====================
 
 class SystemSettings(db.Model):
     __tablename__ = 'system_settings'
 
     id = db.Column(db.Integer, primary_key=True)
-    contractor_percentage = db.Column(db.Float, default=0.0)
-    insurance_amount = db.Column(db.Float, default=0.0)
+    contractor_amount = db.Column(db.Float, default=0.0)  # مبلغ ثابت للعمولة (وليس نسبة)
+    insurance_amount = db.Column(db.Float, default=0.0)  # نسبة مئوية أو مبلغ ثابت
     insurance_type = db.Column(db.String(10), default='percentage')
     tax_amount = db.Column(db.Float, default=0.0)
     tax_type = db.Column(db.String(10), default='percentage')
@@ -335,12 +349,11 @@ def init_default_accounts():
 
     db.session.commit()
 
-
 def init_default_settings():
     """إنشاء الإعدادات الافتراضية"""
     if not SystemSettings.query.first():
         settings = SystemSettings(
-            contractor_percentage=10.0,
+            contractor_amount=0.0,  # مبلغ ثابت للعمولة
             insurance_amount=5.0,
             insurance_type='percentage',
             tax_amount=5.0,
@@ -348,7 +361,6 @@ def init_default_settings():
         )
         db.session.add(settings)
         db.session.commit()
-
 
 def init_default_user():
     """إنشاء مستخدم افتراضي (admin/admin123)"""

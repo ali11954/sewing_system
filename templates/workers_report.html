@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block page_header %}
-<h2><i class="fas fa-chalkboard-user"></i> تقرير الخياطات</h2>
+<h2><i class="fas fa-chalkboard-user"></i> تقرير الخياطات والمساعدات</h2>
 {% endblock %}
 
 {% block content %}
@@ -43,7 +43,7 @@
             <p>{{ start_date.strftime('%Y-%m-%d') }} إلى {{ end_date.strftime('%Y-%m-%d') }}</p>
         </div>
         <div class="col-md-4">
-            <h5>عدد الخياطات</h5>
+            <h5>عدد العاملات</h5>
             <p>{{ workers|length }}</p>
         </div>
         <div class="col-md-4">
@@ -53,7 +53,7 @@
     </div>
 </div>
 
-<!-- بطاقات الخياطات -->
+<!-- بطاقات العاملات -->
 {% for worker in workers %}
 <div class="card mb-4">
     <div class="card-header bg-white">
@@ -61,12 +61,18 @@
             <div class="col-md-6">
                 <h4 class="mb-0">
                     <i class="fas fa-user-circle"></i> {{ worker.name }}
-                    {% if worker.type == 'permanent' %}
+                    {% if worker.type == 'خياطة رئيسية' %}
+                    <span class="badge bg-primary ms-2">{{ worker.type }}</span>
+                    {% elif worker.type == 'مساعدة رسمية' %}
+                    <span class="badge bg-info ms-2">{{ worker.type }}</span>
+                    {% elif worker.type == 'مساعدة مؤقتة' %}
+                    <span class="badge bg-warning ms-2">{{ worker.type }}</span>
+                    {% elif worker.type == 'permanent' %}
                     <span class="badge bg-success ms-2">دائمة</span>
-                    <small class="text-muted ms-2">{{ worker.machine_name }}</small>
                     {% else %}
-                    <span class="badge bg-warning ms-2">مؤقتة</span>
+                    <span class="badge bg-secondary ms-2">مؤقتة</span>
                     {% endif %}
+                    <small class="text-muted ms-2">{{ worker.machine_name }}</small>
                 </h4>
             </div>
             <div class="col-md-6 text-end">
@@ -142,7 +148,7 @@
                         <th></th>
                     </tr>
                 </tfoot>
-            </table>
+            <tr>
         </div>
         {% endif %}
 
@@ -155,15 +161,15 @@
                             <div class="col-md-6">
                                 <table class="table table-sm table-borderless">
                                     <tr>
-                                        <td>إجمالي الأجور:</td>
+                                        <td>إجمالي الأجور:</th>
                                         <td class="text-end text-success">{{ "%.2f"|format(worker.total_amount) }}</td>
                                     </tr>
                                     <tr>
-                                        <td>عمولة المتعهدة ({{ "%.0f"|format(settings.contractor_percentage) if settings else 0 }}%):</td>
+                                        <td>عمولة المتعهدة (مبلغ ثابت):</th>
                                         <td class="text-end text-danger">- {{ "%.2f"|format(worker.contractor_commission) }}</td>
                                     </tr>
                                     <tr>
-                                        <td>التأمينات:</td>
+                                        <td>التأمينات:</th>
                                         <td class="text-end text-danger">- {{ "%.2f"|format(worker.insurance) }}</td>
                                     </tr>
                                 </table>
@@ -171,20 +177,25 @@
                             <div class="col-md-6">
                                 <table class="table table-sm table-borderless">
                                     <tr>
-                                        <td>الضرائب:</td>
+                                        <td>الضرائب:</th>
                                         <td class="text-end text-danger">- {{ "%.2f"|format(worker.tax) }}</td>
                                     </tr>
                                     <tr>
-                                        <td>إجمالي السلف:</td>
+                                        <td>إجمالي السلف:</th>
                                         <td class="text-end text-danger">- {{ "%.2f"|format(worker.total_advances) }}</td>
                                     </tr>
                                     <tr class="table-primary">
-                                        <td><strong>الصافي المستحق:</strong></td>
+                                        <td><strong>صافي المستحق:</strong></th>
                                         <td class="text-end"><strong>{{ "%.2f"|format(worker.net_amount) }}</strong></td>
                                     </tr>
                                 </table>
                             </div>
                         </div>
+                        {% if worker.worker_share %}
+                        <div class="alert alert-secondary mt-2">
+                            <small><i class="fas fa-chart-pie"></i> حصة العامل من صافي إنتاج المكينة: {{ "%.2f"|format(worker.worker_share) }} ريال (50%)</small>
+                        </div>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -257,7 +268,6 @@ function recordPayment(workerName, amount) {
     }
 
     if (confirm(`هل أنت متأكد من تسجيل دفع مبلغ ${amount} ريال للعاملة ${workerName}؟`)) {
-        // إرسال طلب تسجيل الدفع
         fetch(`/workers_report/payment/${workerName}/${amount}/cash`, {
             method: 'POST'
         }).then(response => {
@@ -272,7 +282,6 @@ function recordPayment(workerName, amount) {
 }
 
 function printWorkerReport(workerName) {
-    // طباعة تقرير عاملة محددة
     const workerCard = event.target.closest('.card');
     const printWindow = window.open('', '_blank');
     printWindow.document.write(workerCard.outerHTML);

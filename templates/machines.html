@@ -28,24 +28,16 @@
                             <i class="fas fa-barcode"></i> كود: {{ machine.code }}
                         </p>
                     </div>
-                    <div class="dropdown">
-                        <button class="btn btn-sm btn-light" data-bs-toggle="dropdown">
-                            <i class="fas fa-ellipsis-v"></i>
+                    <!-- أزرار الإجراءات بشكل مباشر -->
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-warning" onclick="editMachine({{ machine.id }})">
+                            <i class="fas fa-edit"></i> تعديل
                         </button>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <button class="dropdown-item" onclick="editMachine({{ machine.id }})">
-                                    <i class="fas fa-edit"></i> تعديل
-                                </button>
-                            </li>
-                            <li>
-                                <a href="{{ url_for('delete_machine', id=machine.id) }}"
-                                   class="dropdown-item text-danger"
-                                   onclick="return confirmDelete('هل أنت متأكد من حذف هذه المكينة؟')">
-                                    <i class="fas fa-trash"></i> حذف
-                                </a>
-                            </li>
-                        </ul>
+                        <a href="{{ url_for('delete_machine', id=machine.id) }}"
+                           class="btn btn-sm btn-danger"
+                           onclick="return confirmDelete('هل أنت متأكد من حذف هذه المكينة؟')">
+                            <i class="fas fa-trash"></i> حذف
+                        </a>
                     </div>
                 </div>
 
@@ -53,12 +45,22 @@
 
                 <div class="mb-2">
                     <i class="fas fa-user-circle"></i>
-                    <strong>المشغلة:</strong> {{ machine.operator_name or 'غير محدد' }}
+                    <strong>الخياطة الرئيسية:</strong> {{ machine.operator_name or 'غير محدد' }}
                 </div>
 
                 <div class="mb-2">
                     <i class="fas fa-phone"></i>
-                    <strong>الهاتف:</strong> {{ machine.operator_phone or '-' }}
+                    <strong>هاتف الخياطة:</strong> {{ machine.operator_phone or '-' }}
+                </div>
+
+                <div class="mb-2">
+                    <i class="fas fa-user-friends"></i>
+                    <strong>المساعدة الرسمية:</strong> {{ machine.assistant_name or 'غير محدد' }}
+                </div>
+
+                <div class="mb-2">
+                    <i class="fas fa-phone"></i>
+                    <strong>هاتف المساعدة:</strong> {{ machine.assistant_phone or '-' }}
                 </div>
 
                 <div class="mt-3">
@@ -105,12 +107,22 @@
                         <input type="text" name="name" class="form-control" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">اسم المشغلة</label>
-                        <input type="text" name="operator_name" class="form-control">
+                        <label class="form-label">اسم الخياطة الرئيسية</label>
+                        <input type="text" name="operator_name" class="form-control" required>
+                        <small class="text-muted">الخياطة التي تشغل المكينة (تأخذ 50% من الأجر)</small>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">رقم الهاتف</label>
+                        <label class="form-label">رقم هاتف الخياطة</label>
                         <input type="tel" name="operator_phone" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم المساعدة الرسمية</label>
+                        <input type="text" name="assistant_name" class="form-control">
+                        <small class="text-muted">المساعدة الدائمة (تأخذ 50% من الأجر)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم هاتف المساعدة</label>
+                        <input type="tel" name="assistant_phone" class="form-control">
                     </div>
                     <div class="form-check">
                         <input type="checkbox" name="is_active" class="form-check-input" checked>
@@ -126,11 +138,84 @@
     </div>
 </div>
 
+<!-- Modal تعديل مكينة -->
+<div class="modal fade" id="editMachineModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-edit"></i> تعديل بيانات المكينة
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" id="editMachineForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">كود المكينة</label>
+                        <input type="text" name="code" id="edit_code" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم المكينة</label>
+                        <input type="text" name="name" id="edit_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم الخياطة الرئيسية</label>
+                        <input type="text" name="operator_name" id="edit_operator_name" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم هاتف الخياطة</label>
+                        <input type="tel" name="operator_phone" id="edit_operator_phone" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">اسم المساعدة الرسمية</label>
+                        <input type="text" name="assistant_name" id="edit_assistant_name" class="form-control">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">رقم هاتف المساعدة</label>
+                        <input type="tel" name="assistant_phone" id="edit_assistant_phone" class="form-control">
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" name="is_active" id="edit_is_active" class="form-check-input">
+                        <label class="form-check-label">نشطة</label>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                    <button type="submit" class="btn btn-primary">حفظ التغييرات</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <script>
 function editMachine(id) {
-    // جلب بيانات المكينة وتعبئة نموذج التعديل
-    // يمكن تنفيذها عبر AJAX
-    alert('سيتم تطوير وظيفة التعديل');
+    // جلب بيانات المكينة عبر API
+    fetch(`/api/machine/${id}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                document.getElementById('edit_code').value = data.code;
+                document.getElementById('edit_name').value = data.name;
+                document.getElementById('edit_operator_name').value = data.operator_name || '';
+                document.getElementById('edit_operator_phone').value = data.operator_phone || '';
+                document.getElementById('edit_assistant_name').value = data.assistant_name || '';
+                document.getElementById('edit_assistant_phone').value = data.assistant_phone || '';
+                document.getElementById('edit_is_active').checked = data.is_active;
+
+                // تعيين action النموذج
+                document.getElementById('editMachineForm').action = `/machines/edit/${id}`;
+
+                // فتح المودال
+                new bootstrap.Modal(document.getElementById('editMachineModal')).show();
+            } else {
+                alert('حدث خطأ في تحميل البيانات');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('حدث خطأ في الاتصال بالخادم');
+        });
 }
 </script>
 {% endblock %}

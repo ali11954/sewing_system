@@ -9,19 +9,24 @@
     <div class="col-md-6 mx-auto">
         <div class="card">
             <div class="card-header">
-                <i class="fas fa-percent"></i> النسب والخصومات
+                <i class="fas fa-coins"></i> الخصومات والإضافات
             </div>
             <div class="card-body">
                 <form method="POST">
+                    <!-- عمولة المتعهدة - مبلغ ثابت -->
                     <div class="mb-4">
                         <label class="form-label">
-                            <i class="fas fa-user-tie"></i> نسبة عمولة المتعهدة (%)
+                            <i class="fas fa-user-tie"></i> عمولة المتعهدة (مبلغ ثابت)
                         </label>
-                        <input type="number" step="0.01" name="contractor_percentage"
-                               class="form-control" value="{{ settings.contractor_percentage if settings else 0 }}">
-                        <small class="text-muted">النسبة المئوية من إجمالي الإنتاج</small>
+                        <div class="input-group">
+                            <input type="number" step="0.01" name="contractor_amount"
+                                   class="form-control" value="{{ settings.contractor_amount if settings else 0 }}">
+                            <span class="input-group-text">ريال</span>
+                        </div>
+                        <small class="text-muted">مبلغ ثابت يخصم من كل عملية إنتاج (بغض النظر عن قيمة الإنتاج)</small>
                     </div>
 
+                    <!-- التأمينات -->
                     <div class="mb-4">
                         <label class="form-label">
                             <i class="fas fa-shield-alt"></i> التأمينات
@@ -38,8 +43,16 @@
                                 </option>
                             </select>
                         </div>
+                        <small class="text-muted">
+                            {% if settings and settings.insurance_type == 'percentage' %}
+                            نسبة مئوية من إجمالي الإنتاج
+                            {% else %}
+                            مبلغ ثابت يخصم من كل عملية إنتاج
+                            {% endif %}
+                        </small>
                     </div>
 
+                    <!-- الضرائب -->
                     <div class="mb-4">
                         <label class="form-label">
                             <i class="fas fa-landmark"></i> الضرائب
@@ -56,11 +69,22 @@
                                 </option>
                             </select>
                         </div>
+                        <small class="text-muted">
+                            {% if settings and settings.tax_type == 'percentage' %}
+                            نسبة مئوية من إجمالي الإنتاج
+                            {% else %}
+                            مبلغ ثابت يخصم من كل عملية إنتاج
+                            {% endif %}
+                        </small>
                     </div>
 
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle"></i>
-                        <strong>تنبيه:</strong> تغيير هذه الإعدادات سيؤثر على جميع المستخلصات المستقبلية فقط
+                        <strong>تنبيه:</strong> تغيير هذه الإعدادات سيؤثر على:
+                        <ul class="mb-0 mt-2">
+                            <li>عمليات الإنتاج الجديدة فقط</li>
+                            <li>المستخلصات المستقبلية</li>
+                        </ul>
                     </div>
 
                     <div class="text-center">
@@ -73,4 +97,26 @@
         </div>
     </div>
 </div>
+
+<script>
+// تحديث النص التوضيحي عند تغيير نوع التأمين
+document.querySelector('select[name="insurance_type"]').addEventListener('change', function() {
+    const small = this.closest('.mb-4').querySelector('small');
+    if (this.value === 'percentage') {
+        small.textContent = 'نسبة مئوية من إجمالي الإنتاج';
+    } else {
+        small.textContent = 'مبلغ ثابت يخصم من كل عملية إنتاج';
+    }
+});
+
+// تحديث النص التوضيحي عند تغيير نوع الضريبة
+document.querySelector('select[name="tax_type"]').addEventListener('change', function() {
+    const small = this.closest('.mb-4').queryselector('small');
+    if (this.value === 'percentage') {
+        small.textContent = 'نسبة مئوية من إجمالي الإنتاج';
+    } else {
+        small.textContent = 'مبلغ ثابت يخصم من كل عملية إنتاج';
+    }
+});
+</script>
 {% endblock %}

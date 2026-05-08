@@ -25,14 +25,19 @@
                             <label class="form-label">
                                 <i class="fas fa-industry"></i> المكينة
                             </label>
-                            <select name="machine_id" class="form-select" required>
+                            <select name="machine_id" class="form-select" required id="machineSelect">
                                 <option value="">اختر المكينة...</option>
                                 {% for m in machines %}
-                                <option value="{{ m.id }}" {% if production and production.machine_id == m.id %}selected{% endif %}>
-                                    {{ m.name }} - {{ m.operator_name }}
+                                <option value="{{ m.id }}"
+                                        data-operator="{{ m.operator_name }}"
+                                        data-assistant="{{ m.assistant_name or '' }}"
+                                        {% if production and production.machine_id == m.id %}selected{% endif %}>
+                                    {{ m.name }} - الخياطة: {{ m.operator_name }}
+                                    {% if m.assistant_name %} (مساعدة: {{ m.assistant_name }}){% endif %}
                                 </option>
                                 {% endfor %}
                             </select>
+                            <small class="text-muted">الخياطة الرئيسية تأخذ 50%، والمساعدة تأخذ 50% من صافي الأجر</small>
                         </div>
 
                         <div class="col-md-6 mb-3">
@@ -59,22 +64,27 @@
                                    min="1" required id="quantity">
                         </div>
 
-                        <div class="col-md-6 mb-3">
+                        <!-- المساعدة المؤقتة -->
+                        <div class="col-md-12 mb-3">
                             <label class="form-label">
-                                <i class="fas fa-user"></i> اسم العاملة
+                                <i class="fas fa-user-friends"></i> مساعدة مؤقتة (اختياري)
                             </label>
-                            <input type="text" name="worker_name" class="form-control"
-                                   value="{{ production.worker_name if production else '' }}"
-                                   placeholder="اختياري للعاملات المؤقتات">
+                            <input type="text" name="temporary_assistant" class="form-control"
+                                   value="{{ production.temporary_assistant if production else '' }}"
+                                   id="temporaryAssistant"
+                                   placeholder="أدخل اسم المساعدة المؤقتة">
+                            <small class="text-muted">
+                                إذا تم إدخال مساعدة مؤقتة، سيتم توزيع 50% من صافي الأجر لها بدلاً من المساعدة الرسمية
+                            </small>
                         </div>
 
-                        <div class="col-md-6 mb-3">
-                            <div class="form-check mt-4">
-                                <input type="checkbox" name="is_temporary" class="form-check-input" id="isTemporary"
-                                       {% if production and production.is_temporary %}checked{% endif %}>
-                                <label class="form-check-label" for="isTemporary">
-                                    <i class="fas fa-user-clock"></i> عاملة مؤقتة
-                                </label>
+                        <!-- عرض تفاصيل التوزيع -->
+                        <div class="col-12 mb-3">
+                            <div class="alert alert-secondary" id="distributionInfo">
+                                <i class="fas fa-chart-pie"></i>
+                                <strong>توزيع الأجر:</strong><br>
+                                <span id="operatorInfo">الخياطة الرئيسية: -</span><br>
+                                <span id="assistantInfo">المساعدة: -</span>
                             </div>
                         </div>
 
@@ -88,7 +98,7 @@
                         <div class="col-12 mb-3">
                             <div class="alert alert-info">
                                 <i class="fas fa-info-circle"></i>
-                                <strong>الإجمالي:</strong>
+                                <strong>إجمالي الإنتاج:</strong>
                                 <span id="totalAmount">0.00</span> ريال
                             </div>
                         </div>
@@ -113,7 +123,33 @@
 const quantityInput = document.getElementById('quantity');
 const bagTypeSelect = document.querySelector('select[name="bag_type_id"]');
 const totalSpan = document.getElementById('totalAmount');
+const machineSelect = document.getElementById('machineSelect');
+const temporaryAssistant = document.getElementById('temporaryAssistant');
+const operatorInfo = document.getElementById('operatorInfo');
+const assistantInfo = document.getElementById('assistantInfo');
 
+// تحديث معلومات التوزيع
+function updateDistributionInfo() {
+    const selectedOption = machineSelect.options[machineSelect.selectedIndex];
+    const operatorName = selectedOption?.dataset?.operator || '';
+    const assistantName = selectedOption?.dataset?.assistant || '';
+    const tempAssistant = temporaryAssistant.value;
+
+    // تحديد المساعدة (مؤقتة أو رسمية)
+    let assistantDisplay = '';
+    if (tempAssistant) {
+        assistantDisplay = `المساعدة المؤقتة: ${tempAssistant} (تأخذ 50% من صافي الأجر)`;
+    } else if (assistantName) {
+        assistantDisplay = `المساعدة الرسمية: ${assistantName} (تأخذ 50% من صافي الأجر)`;
+    } else {
+        assistantDisplay = `لا توجد مساعدة - يذهب كامل الأجر للخياطة الرئيسية`;
+    }
+
+    operatorInfo.innerHTML = `<i class="fas fa-user-circle"></i> الخياطة الرئيسية: ${operatorName || 'غير محدد'} (تأخذ 50% من صافي الأجر)`;
+    assistantInfo.innerHTML = `<i class="fas fa-user-friends"></i> ${assistantDisplay}`;
+}
+
+// حساب الإجمالي
 function calculateTotal() {
     const quantity = parseInt(quantityInput.value) || 0;
     const selectedOption = bagTypeSelect.options[bagTypeSelect.selectedIndex];
@@ -122,8 +158,21 @@ function calculateTotal() {
     totalSpan.textContent = total.toFixed(2);
 }
 
+// عند تغيير المكينة
+machineSelect.addEventListener('change', updateDistributionInfo);
+
+// عند تغيير المساعدة المؤقتة
+temporaryAssistant.addEventListener('input', updateDistributionInfo);
+
+// عند تغيير الكمية أو نوع الكيس
 quantityInput.addEventListener('input', calculateTotal);
-bagTypeSelect.addEventListener('change', calculateTotal);
+bagTypeSelect.addEventListener('change', () => {
+    calculateTotal();
+    updateDistributionInfo();
+});
+
+// التهيئة الأولية
 calculateTotal();
+updateDistributionInfo();
 </script>
 {% endblock %}

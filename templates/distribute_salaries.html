@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-hand-holding-heart"></i> توزيع الأجور</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- معلومات الملخص -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-chart-line"></i> ملخص فترة التوزيع
+            </div>
+            <div class="card-body">
+                <form method="GET" class="row g-3" id="filterForm">
+                    <div class="col-md-3">
+                        <label class="form-label">من تاريخ</label>
+                        <input type="date" name="start_date" class="form-control" value="{{ start_date.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">إلى تاريخ</label>
+                        <input type="date" name="end_date" class="form-control" value="{{ end_date.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">المستخلص</label>
+                        <select name="settlement_id" class="form-select">
+                            <option value="">اختر مستخلص...</option>
+                            {% for s in settlements %}
+                            <option value="{{ s.id }}" {% if settlement and settlement.id == s.id %}selected{% endif %}>
+                                {{ s.start_date.strftime('%Y-%m-%d') }} - {{ s.end_date.strftime('%Y-%m-%d') }} ({{ "%.2f"|format(s.net_amount) }} ريال)
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-search"></i> عرض
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if workers_data %}
+        <!-- جدول توزيع الأجور -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-users"></i> توزيع الأجور
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>إجمالي المبلغ المتاح للتوزيع:</strong> {{ "%.2f"|format(total_net_amount) }} ريال
+                </div>
+
+                <form method="POST" id="distributeForm">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>اسم الخياطة</th>
+                                    <th>النوع</th>
+                                    <th>إجمالي الأجور</th>
+                                    <th>عمولة المتعهدة</th>
+                                    <th>التأمينات</th>
+                                    <th>الضرائب</th>
+                                    <th>إجمالي الخصومات</th>
+                                    <th>السلف</th>
+                                    <th>المستحق</th>
+                                    <th>المبلغ المدفوع</th>
+                                    <th>طريقة الدفع</th>
+                                    <th>رقم الإيصال</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for worker in workers_data %}
+                                <tr>
+                                    <td>{{ loop.index }}</td>
+                                    <td>
+                                        {{ worker.name }}
+                                        <input type="hidden" name="worker_name_{{ loop.index }}" value="{{ worker.name }}">
+                                    </td>
+                                    <td>
+                                        {% if worker.type == 'permanent' %}
+                                        <span class="badge bg-success">دائمة</span>
+                                        {% else %}
+                                        <span class="badge bg-warning">مؤقتة</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="text-success">{{ "%.2f"|format(worker.total_amount) }}</td>
+                                    <td class="text-danger">{{ "%.2f"|format(worker.commission) }}</td>
+                                    <td class="text-danger">{{ "%.2f"|format(worker.insurance) }}</td>
+                                    <td class="text-danger">{{ "%.2f"|format(worker.tax) }}</td>
+                                    <td class="text-danger fw-bold">{{ "%.2f"|format(worker.deductions) }}</td>
+                                    <td class="text-danger">{{ "%.2f"|format(worker.total_advances) }}</td>
+                                    <td class="text-primary fw-bold">{{ "%.2f"|format(worker.net_amount) }}</td>
+                                    <td>
+                                        <input type="number" step="0.01" name="amount_{{ loop.index }}"
+                                               class="form-control amount-input" data-net="{{ worker.net_amount }}"
+                                               value="{{ worker.net_amount }}" style="width: 120px;" required>
+                                    </td>
+                                    <td>
+                                        <select name="method_{{ loop.index }}" class="form-select" style="width: 100px;">
+                                            <option value="cash">نقدي</option>
+                                            <option value="bank">تحويل بنكي</option>
+                                            <option value="check">شيك</option>
+                                        </select>
+                                    </td>
+                                    <td>
+                                        <input type="text" name="receipt_{{ loop.index }}" class="form-control"
+                                               placeholder="رقم الإيصال" style="width: 120px;">
+                                    </td>
+                                    <td>
+                                        <button type="button" class="btn btn-sm btn-success distribute-one"
+                                                data-index="{{ loop.index }}" data-name="{{ worker.name }}"
+                                                data-amount="{{ worker.net_amount }}">
+                                            <i class="fas fa-money-bill"></i> صرف
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th colspan="9" class="text-end">الإجمالي:</th>
+                                    <th id="totalNet">{{ "%.2f"|format(total_net_amount) }}</th>
+                                    <th id="totalPaid">0.00</th>
+                                    <th colspan="3"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div class="text-center mt-3">
+                        <button type="button" class="btn btn-success btn-lg" id="distributeAllBtn">
+                            <i class="fas fa-hand-holding-heart"></i> توزيع الكل
+                        </button>
+                        <button type="reset" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-undo"></i> إعادة تعيين
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- سجل المدفوعات -->
+        <div class="card mt-4">
+            <div class="card-header bg-info text-white">
+                <i class="fas fa-history"></i> سجل المدفوعات الأخيرة
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>التاريخ</th>
+                                <th>اسم الخياطة</th>
+                                <th>المبلغ</th>
+                                <th>طريقة الدفع</th>
+                                <th>رقم الإيصال</th>
+                                <th>الحالة</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in recent_payments %}
+                            <tr>
+                                <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ payment.worker_name }}</td>
+                                <td class="text-success">{{ "%.2f"|format(payment.amount) }} ريال</td>
+                                <td>
+                                    {% if payment.payment_method == 'cash' %}نقدي
+                                    {% elif payment.payment_method == 'bank' %}تحويل بنكي
+                                    {% else %}شيك{% endif %}
+                                  </td>
+                                <td>{{ payment.receipt_number or '-' }}</td>
+                                <td>
+                                    {% if payment.is_signed %}
+                                    <span class="badge bg-success">موقعة</span>
+                                    {% else %}
+                                    <span class="badge bg-warning">غير موقعة</span>
+                                    {% endif %}
+                                  </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center">لا توجد مدفوعات مسجلة</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="alert alert-warning text-center">
+            <i class="fas fa-info-circle"></i> لا توجد بيانات للفترة المحددة
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<script>
+// تحديث الإجمالي المدفوع
+function updateTotalPaid() {
+    let total = 0;
+    document.querySelectorAll('.amount-input').forEach(input => {
+        total += parseFloat(input.value) || 0;
+    });
+    document.getElementById('totalPaid').textContent = total.toFixed(2);
+}
+
+// الاستماع لتغييرات المبالغ
+document.querySelectorAll('.amount-input').forEach(input => {
+    input.addEventListener('change', function() {
+        const net = parseFloat(this.dataset.net);
+        if (parseFloat(this.value) > net) {
+            alert('المبلغ المدفوع لا يمكن أن يتجاوز المستحق');
+            this.value = net.toFixed(2);
+        }
+        updateTotalPaid();
+    });
+});
+// توزيع لخياطة واحدة
+document.querySelectorAll('.distribute-one').forEach(btn => {
+    btn.addEventListener('click', async function() {
+        const index = this.dataset.index;
+        const name = this.dataset.name;
+        const amount = document.querySelector(`input[name="amount_${index}"]`).value;
+        const method = document.querySelector(`select[name="method_${index}"]`).value;
+        const receipt = document.querySelector(`input[name="receipt_${index}"]`).value;
+
+        // الحصول على التواريخ من نموذج الفلتر
+        const startDate = document.querySelector('input[name="start_date"]').value;
+        const endDate = document.querySelector('input[name="end_date"]').value;
+
+        if (parseFloat(amount) <= 0) {
+            alert('الرجاء إدخال مبلغ صحيح');
+            return;
+        }
+
+        if (confirm(`هل أنت متأكد من صرف مبلغ ${amount} ريال للخياطة ${name}؟`)) {
+            const response = await fetch('/api/distribute-salary', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    worker_name: name,
+                    amount: parseFloat(amount),
+                    payment_method: method,
+                    receipt_number: receipt,
+                    start_date: startDate,
+                    end_date: endDate
+                })
+            });
+
+            const data = await response.json();
+            if (data.success) {
+                alert('✅ تم تسجيل الدفع بنجاح');
+                location.reload();
+            } else {
+                alert('❌ ' + data.message);
+            }
+        }
+    });
+});
+// توزيع الكل
+document.getElementById('distributeAllBtn').addEventListener('click', async function() {
+    const totalNet = parseFloat(document.getElementById('totalNet').textContent);
+    if (confirm(`هل أنت متأكد من توزيع جميع المبالغ (${totalNet.toFixed(2)} ريال)؟`)) {
+        const workers = [];
+        document.querySelectorAll('.amount-input').forEach((input, idx) => {
+            const amount = parseFloat(input.value);
+            if (amount > 0) {
+                workers.push({
+                    name: document.querySelector(`input[name="worker_name_${idx+1}"]`).value,
+                    amount: amount,
+                    method: document.querySelector(`select[name="method_${idx+1}"]`).value,
+                    receipt: document.querySelector(`input[name="receipt_${idx+1}"]`).value
+                });
+            }
+        });
+
+        const response = await fetch('/api/distribute-all-salaries', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ workers: workers })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            alert('تم توزيع جميع المبالغ بنجاح');
+            location.reload();
+        } else {
+            alert('حدث خطأ: ' + data.message);
+        }
+    }
+});
+
+updateTotalPaid();
+</script>
+{% endblock %}
