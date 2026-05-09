@@ -1,18 +1,7 @@
-# إطار العمل الأساسي
 Flask==2.3.3
+Flask-SQLAlchemy==3.0.5
 Flask-Login==0.6.2
-Flask-SQLAlchemy==3.1.1
-SQLAlchemy==2.0.21
 Werkzeug==2.3.7
-
-# قاعدة البيانات
-psycopg2-binary==2.9.9
-
-
-# التوثيق والبيئة
 python-dotenv==1.0.0
-email-validator==2.0.0
-
-# خادم الإنتاج
 gunicorn==21.2.0
-
+psycopg2-binary==2.9.9
