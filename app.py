@@ -17,24 +17,30 @@ app.config.from_object(Config)
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 app.config['TEMPLATES_AUTO_RELOAD'] = False
 
-# استخدام قاعدة البيانات من متغير البيئة (لـ Render/Supabase)
-DATABASE_URL = os.environ.get('DATABASE_URL')
-if DATABASE_URL:
-    # إصلاح URL لـ PostgreSQL (إضافة +psycopg2 إذا لزم الأمر)
-    if DATABASE_URL.startswith('postgresql://'):
-        # إضافة خيارات SSL للتوصيل الآمن
-        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-            'connect_args': {
-                'sslmode': 'require'
+# ========== استخدام SQLite مؤقتاً لحل مشكلة النشر على Render ==========
+# تم تعطيل PostgreSQL مؤقتاً لتجنب مشاكل التوافق مع psycopg2
+# يمكن إعادة تفعيله بعد نجاح النشر
+
+USE_POSTGRESQL = False  # غيّر إلى True لإعادة تفعيل PostgreSQL
+
+if USE_POSTGRESQL:
+    DATABASE_URL = os.environ.get('DATABASE_URL')
+    if DATABASE_URL:
+        if DATABASE_URL.startswith('postgresql://'):
+            app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+            app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+                'connect_args': {
+                    'sslmode': 'require'
+                }
             }
-        }
+        else:
+            app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
     else:
-        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+        app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sewing.db'
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sewing.db'
 
-print(f"📊 قاعدة البيانات المستخدمة: {'PostgreSQL (Supabase)' if DATABASE_URL else 'SQLite (محلي)'}")
+print(f"📊 قاعدة البيانات المستخدمة: {'PostgreSQL (Supabase)' if USE_POSTGRESQL and os.environ.get('DATABASE_URL') else 'SQLite (محلي)'}")
 
 # تهيئة قاعدة البيانات
 db.init_app(app)
