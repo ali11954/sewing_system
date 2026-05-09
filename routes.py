@@ -95,7 +95,9 @@ def register_routes(app):
             machine_id = request.form.get('machine_id')
             bag_type_id = request.form.get('bag_type_id')
             quantity = int(request.form.get('quantity'))
-            temporary_assistant = request.form.get('temporary_assistant')  # المساعدة المؤقتة
+            temporary_assistant = request.form.get('temporary_assistant')
+            contractor_reference = request.form.get('contractor_reference')  # رقم مرجع المتعهدة
+            planning_reference = request.form.get('planning_reference')  # رقم مرجع التخطيط
             notes = request.form.get('notes')
 
             # التحقق من عدم وجود إنتاج مكرر
@@ -115,7 +117,9 @@ def register_routes(app):
                 machine_id=machine_id,
                 bag_type_id=bag_type_id,
                 quantity=quantity,
-                temporary_assistant=temporary_assistant,  # المساعدة المؤقتة
+                temporary_assistant=temporary_assistant,
+                contractor_reference=contractor_reference,
+                planning_reference=planning_reference,
                 notes=notes,
                 created_by=current_user.username
             )
@@ -141,7 +145,9 @@ def register_routes(app):
             production.machine_id = request.form.get('machine_id')
             production.bag_type_id = request.form.get('bag_type_id')
             production.quantity = int(request.form.get('quantity'))
-            production.temporary_assistant = request.form.get('temporary_assistant')  # المساعدة المؤقتة
+            production.temporary_assistant = request.form.get('temporary_assistant')
+            production.contractor_reference = request.form.get('contractor_reference')  # رقم مرجع المتعهدة
+            production.planning_reference = request.form.get('planning_reference')  # رقم مرجع التخطيط
             production.notes = request.form.get('notes')
 
             db.session.commit()
@@ -394,6 +400,11 @@ def register_routes(app):
 
             total_production_amount = sum(p.total_amount for p in productions)
             total_quantity = sum(p.quantity for p in productions)
+
+            # جمع أرقام المراجع
+            contractor_references = list(set([p.contractor_reference for p in productions if p.contractor_reference]))
+            planning_references = list(set([p.planning_reference for p in productions if p.planning_reference]))
+
             # الحصول على الإعدادات
             settings = SystemSettings.query.first()
 
@@ -401,11 +412,9 @@ def register_routes(app):
             total_insurance = total_production_amount * (settings.insurance_amount / 100) if settings else 0
             total_tax = total_production_amount * (settings.tax_amount / 100) if settings else 0
 
-            # صافي المستحق للمتعهدة = إجمالي الإنتاج - التأمين - الضريبة - السلفة
-            # (عمولة المتعهدة لا تخصم من المستخلص)
+            # صافي المستحق للمتعهدة
             net_amount = total_production_amount - total_insurance - total_tax - advance_to_contractor
 
-            # ملاحظة: contractor_commission = 0 في المستخلص (لا تظهر)
             settlement = Settlement(
                 start_date=start_date,
                 end_date=end_date,
@@ -416,6 +425,8 @@ def register_routes(app):
                 total_tax=total_tax,
                 advance_to_contractor=advance_to_contractor,
                 net_amount=net_amount,
+                contractor_references=', '.join(contractor_references) if contractor_references else '-',
+                planning_references=', '.join(planning_references) if planning_references else '-',
                 created_by=current_user.username,
                 status='draft'
             )
@@ -1369,52 +1380,155 @@ def register_routes(app):
 
     def get_settlements_report(start_date, end_date):
         """تقرير المستخلصات"""
-        settlements = Settlement.query.filter(
-            Settlement.created_date.between(start_date, end_date)
-        ).all()
+        try:
+            settlements = Settlement.query.filter(
+                Settlement.created_date.between(start_date, end_date)
+            ).order_by(Settlement.created_date.desc()).all()
 
-        settlements_list = []
-        total_production = 0
-        total_commission = 0
-        total_insurance = 0
-        total_tax = 0
-        total_advances = 0
-        total_net = 0
+            settlements_list = []
+            total_production = 0
+            total_commission = 0
+            total_insurance = 0
+            total_tax = 0
+            total_advances = 0
+            total_net = 0
 
-        for s in settlements:
-            settlements_list.append({
-                'start_date': s.start_date.strftime('%Y-%m-%d'),
-                'end_date': s.end_date.strftime('%Y-%m-%d'),
-                'type': s.settlement_type,
-                'total_production': s.total_production_amount,
-                'commission': s.contractor_commission,
-                'insurance': s.total_insurance,
-                'tax': s.total_tax,
-                'advances': s.total_advances,
-                'net': s.net_amount,
-                'status': s.status
+            for s in settlements:
+                settlements_list.append({
+                    'start_date': s.start_date.strftime('%Y-%m-%d'),
+                    'end_date': s.end_date.strftime('%Y-%m-%d'),
+                    'type': s.settlement_type,
+                    'total_production': s.total_production_amount,
+                    'commission': 0,  # تم إزالة العمولة من المستخلص
+                    'insurance': s.total_insurance,
+                    'tax': s.total_tax,
+                    'advances': s.advance_to_contractor,
+                    'net': s.net_amount,
+                    'status': s.status
+                })
+
+                total_production += s.total_production_amount
+                total_insurance += s.total_insurance
+                total_tax += s.total_tax
+                total_advances += s.advance_to_contractor
+                total_net += s.net_amount
+
+            return {
+                'success': True,
+                'title': 'تقرير المستخلصات',
+                'data': {
+                    'settlements': settlements_list,
+                    'total_production': total_production,
+                    'total_commission': total_commission,
+                    'total_insurance': total_insurance,
+                    'total_tax': total_tax,
+                    'total_advances': total_advances,
+                    'total_net': total_net
+                }
+            }
+        except Exception as e:
+            return {
+                'success': False,
+                'title': 'تقرير المستخلصات',
+                'data': {},
+                'message': str(e)
+            }
+
+    @app.route('/settlements_report')
+    @login_required
+    def settlements_report_page():
+        """صفحة تقرير المستخلصات المتقدم"""
+        bag_types = BagType.query.filter_by(is_active=True).all()
+        today = datetime.now().date()
+        start_date = today.replace(day=1)
+        end_date = today
+        return render_template('settlements_report.html',
+                               bag_types=bag_types,
+                               start_date=start_date,
+                               end_date=end_date)
+
+    @app.route('/api/settlements_report')
+    @login_required
+    def api_settlements_report():
+        """API لتقرير المستخلصات المتقدم"""
+        try:
+            start_date = datetime.strptime(request.args.get('start_date'), '%Y-%m-%d').date()
+            end_date = datetime.strptime(request.args.get('end_date'), '%Y-%m-%d').date()
+            selected_bag_ids_str = request.args.get('bag_ids', '')
+
+            # معالجة الأصناف المختارة بشكل صحيح
+            selected_bag_ids = []
+            if selected_bag_ids_str:
+                # تقسيم الأرقام (قد تأتي مفصولة بفواصل)
+                for x in selected_bag_ids_str.split(','):
+                    if x.strip().isdigit():
+                        selected_bag_ids.append(int(x.strip()))
+
+            # جلب الإنتاج حسب الفترة
+            query = Production.query.filter(
+                Production.date.between(start_date, end_date)
+            )
+
+            # تطبيق فلتر الأصناف إذا تم اختيار أي منها
+            if selected_bag_ids:
+                query = query.filter(Production.bag_type_id.in_(selected_bag_ids))
+
+            productions = query.order_by(Production.date).all()
+
+            # تجميع البيانات حسب التاريخ ونوع الكيس (بدون مكينة)
+            grouped_data = {}
+            for p in productions:
+                key = f"{p.date.strftime('%Y-%m-%d')}_{p.bag_type_id}"
+
+                if key not in grouped_data:
+                    grouped_data[key] = {
+                        'date': p.date.strftime('%Y-%m-%d'),
+                        'bag_type': p.bag_type.full_name if p.bag_type else '-',
+                        'quantity': 0,
+                        'amount': 0,
+                        'contractor_reference': '-',
+                        'planning_reference': '-'
+                    }
+
+                grouped_data[key]['quantity'] += p.quantity
+                grouped_data[key]['amount'] += p.total_amount
+
+                # تحديث المراجع (أخذ أول مرجع غير فارغ)
+                if p.contractor_reference and grouped_data[key]['contractor_reference'] == '-':
+                    grouped_data[key]['contractor_reference'] = p.contractor_reference
+                if p.planning_reference and grouped_data[key]['planning_reference'] == '-':
+                    grouped_data[key]['planning_reference'] = p.planning_reference
+
+            # تحويل إلى قائمة وترتيب حسب التاريخ
+            report_rows = list(grouped_data.values())
+            report_rows.sort(key=lambda x: x['date'])
+
+            # حساب الإجماليات الكلية
+            grand_total_quantity = sum(row['quantity'] for row in report_rows)
+            grand_total_amount = sum(row['amount'] for row in report_rows)
+
+            # جمع أرقام المراجع الفريدة
+            contractor_refs = list(
+                set([row['contractor_reference'] for row in report_rows if row['contractor_reference'] != '-']))
+            planning_refs = list(
+                set([row['planning_reference'] for row in report_rows if row['planning_reference'] != '-']))
+
+            return jsonify({
+                'success': True,
+                'data': {
+                    'report_rows': report_rows,
+                    'grand_total_quantity': grand_total_quantity,
+                    'grand_total_amount': grand_total_amount,
+                    'contractor_references': contractor_refs,
+                    'planning_references': planning_refs,
+                    'start_date': start_date.strftime('%Y-%m-%d'),
+                    'end_date': end_date.strftime('%Y-%m-%d')
+                }
             })
 
-            total_production += s.total_production_amount
-            total_commission += s.contractor_commission
-            total_insurance += s.total_insurance
-            total_tax += s.total_tax
-            total_advances += s.total_advances
-            total_net += s.net_amount
-
-        return {
-            'success': True,
-            'title': 'تقرير المستخلصات',
-            'data': {
-                'settlements': settlements_list,
-                'total_production': total_production,
-                'total_commission': total_commission,
-                'total_insurance': total_insurance,
-                'total_tax': total_tax,
-                'total_advances': total_advances,
-                'total_net': total_net
-            }
-        }
+        except Exception as e:
+            print(f"Error: {str(e)}")
+            return jsonify({'success': False, 'message': str(e)})
 
     def get_advances_report(start_date, end_date):
         """تقرير السلف"""
@@ -1443,6 +1557,198 @@ def register_routes(app):
                 'total_amount': total_amount
             }
         }
+
+    from flask import (
+        render_template,
+        request,
+        redirect,
+        url_for,
+        flash,
+        make_response,
+        current_app
+    )
+    from datetime import datetime
+    from weasyprint import HTML
+    import io
+
+    @app.route('/settlements_report_pdf')
+    @login_required
+    def settlements_report_pdf():
+        """تصدير تقرير المستخلصات PDF"""
+
+        try:
+            # =========================
+            # قراءة التواريخ
+            # =========================
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
+
+            if not start_date_str or not end_date_str:
+                flash('يرجى تحديد الفترة الزمنية', 'warning')
+                return redirect(url_for('settlements_report_page'))
+
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+            # =========================
+            # قراءة الأصناف
+            # =========================
+            selected_bag_ids = []
+
+            bag_ids_str = request.args.get('bag_ids', '').strip()
+
+            if bag_ids_str:
+                selected_bag_ids = [
+                    int(x)
+                    for x in bag_ids_str.split(',')
+                    if x.strip().isdigit()
+                ]
+
+            # =========================
+            # الاستعلام
+            # =========================
+            query = Production.query.filter(
+                Production.date.between(start_date, end_date)
+            )
+
+            if selected_bag_ids:
+                query = query.filter(
+                    Production.bag_type_id.in_(selected_bag_ids)
+                )
+
+            productions = query.order_by(Production.date.asc()).all()
+
+            # =========================
+            # تجميع البيانات
+            # =========================
+            grouped_data = {}
+
+            for p in productions:
+
+                key = f"{p.date}_{p.bag_type_id}"
+
+                if key not in grouped_data:
+                    grouped_data[key] = {
+                        'date': p.date,
+                        'bag_type': (
+                            p.bag_type.full_name
+                            if p.bag_type else '-'
+                        ),
+                        'quantity': 0,
+                        'amount': 0,
+                        'contractor_reference': '-',
+                        'planning_reference': '-'
+                    }
+
+                grouped_data[key]['quantity'] += float(p.quantity or 0)
+                grouped_data[key]['amount'] += float(p.total_amount or 0)
+
+                if (
+                        p.contractor_reference and
+                        grouped_data[key]['contractor_reference'] == '-'
+                ):
+                    grouped_data[key]['contractor_reference'] = p.contractor_reference
+
+                if (
+                        p.planning_reference and
+                        grouped_data[key]['planning_reference'] == '-'
+                ):
+                    grouped_data[key]['planning_reference'] = p.planning_reference
+
+            report_rows = list(grouped_data.values())
+
+            report_rows.sort(
+                key=lambda x: (x['bag_type'], x['date'])
+            )
+
+            # =========================
+            # تجميع حسب الصنف
+            # =========================
+            grouped_by_bag = {}
+
+            for row in report_rows:
+
+                bag_name = row['bag_type']
+
+                if bag_name not in grouped_by_bag:
+                    grouped_by_bag[bag_name] = []
+
+                grouped_by_bag[bag_name].append(row)
+
+            # =========================
+            # الإجماليات
+            # =========================
+            grand_total_quantity = sum(
+                row['quantity'] for row in report_rows
+            )
+
+            grand_total_amount = sum(
+                row['amount'] for row in report_rows
+            )
+
+            bag_names = ', '.join(grouped_by_bag.keys())
+
+            current_datetime = datetime.now()
+
+            # =========================
+            # توليد HTML
+            # =========================
+            html_content = render_template(
+                'settlements_report_pdf.html',
+
+                grouped_by_bag=grouped_by_bag,
+                bag_names=bag_names,
+
+                start_date=start_date,
+                end_date=end_date,
+
+                grand_total_quantity=grand_total_quantity,
+                grand_total_amount=grand_total_amount,
+
+                current_datetime=current_datetime
+            )
+
+            # =========================
+            # توليد PDF
+            # =========================
+            pdf_file = HTML(
+                string=html_content,
+                base_url=request.host_url
+            ).write_pdf()
+
+            # =========================
+            # تجهيز الاستجابة
+            # =========================
+            response = make_response(pdf_file)
+
+            response.headers['Content-Type'] = 'application/pdf'
+
+            # اسم إنجليزي لتجنب مشاكل المتصفحات
+            filename = (
+                f"settlements_report_"
+                f"{start_date}_{end_date}.pdf"
+            )
+
+            response.headers[
+                'Content-Disposition'
+            ] = f'inline; filename="{filename}"'
+
+            return response
+
+        except Exception as e:
+
+            current_app.logger.error(
+                f"PDF ERROR: {str(e)}"
+            )
+
+            flash(
+                f'حدث خطأ أثناء إنشاء ملف PDF: {str(e)}',
+                'danger'
+            )
+
+            return redirect(
+                url_for('settlements_report_page')
+            )
 
     def get_financial_report(start_date, end_date):
         """التقرير المالي"""

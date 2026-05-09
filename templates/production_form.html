@@ -21,6 +21,16 @@
                                    value="{{ production.date.strftime('%Y-%m-%d') if production else '' }}" required>
                         </div>
 
+                        <!-- رقم مرجع المتعهدة -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-id-card"></i> رقم مرجع المتعهدة
+                            </label>
+                            <input type="text" name="contractor_reference" class="form-control"
+                                   value="{{ production.contractor_reference if production else '' }}"
+                                   placeholder="اختياري - رقم مرجع المتعهدة">
+                        </div>
+
                         <div class="col-md-6 mb-3">
                             <label class="form-label">
                                 <i class="fas fa-industry"></i> المكينة
@@ -38,6 +48,16 @@
                                 {% endfor %}
                             </select>
                             <small class="text-muted">الخياطة الرئيسية تأخذ 50%، والمساعدة تأخذ 50% من صافي الأجر</small>
+                        </div>
+
+                        <!-- رقم مرجع إدارة التخطيط -->
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">
+                                <i class="fas fa-chart-line"></i> رقم مرجع إدارة التخطيط
+                            </label>
+                            <input type="text" name="planning_reference" class="form-control"
+                                   value="{{ production.planning_reference if production else '' }}"
+                                   placeholder="اختياري - رقم مرجع التخطيط">
                         </div>
 
                         <div class="col-md-6 mb-3">

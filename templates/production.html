@@ -56,6 +56,8 @@
                         <th>الإجمالي</th>
                         <th>الخياطة الرئيسية</th>
                         <th>المساعدة</th>
+                        <th>مرجع المتعهدة</th>
+                        <th>مرجع التخطيط</th>
                         <th>الإجراءات</th>
                     </tr>
                 </thead>
@@ -79,6 +81,8 @@
                             <span class="badge bg-secondary">بدون مساعدة</span>
                             {% endif %}
                         </td>
+                        <td>{{ prod.contractor_reference or '-' }}</td>
+                        <td>{{ prod.planning_reference or '-' }}</td>
                         <td class="action-buttons">
                             <a href="{{ url_for('edit_production', id=prod.id) }}" class="btn btn-sm btn-warning">
                                 <i class="fas fa-edit"></i>
@@ -92,7 +96,7 @@
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="10" class="text-center">لا توجد بيانات</td>
+                        <td colspan="12" class="text-center">لا توجد بيانات</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -101,7 +105,7 @@
                         <th colspan="4" class="text-end">الإجمالي:</th>
                         <th id="totalQuantity">{{ "%.0f"|format(productions|sum(attribute='quantity')) }}</th>
                         <th></th>
-                        <th colspan="4">{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
+                        <th colspan="6">{{ "%.2f"|format(productions|sum(attribute='total_amount')) }}</th>
                     </tr>
                 </tfoot>
             </table>
@@ -127,6 +131,9 @@
                     </li>
                     <li class="nav-item" role="presentation">
                         <button class="nav-link" data-bs-toggle="tab" data-bs-target="#byMachine" type="button">حسب المكينة</button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#byReference" type="button">حسب المراجع</button>
                     </li>
                 </ul>
                 <div class="tab-content mt-3">
@@ -255,6 +262,44 @@
                                         <th>100%</th>
                                     </tr>
                                 </tfoot>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- تقرير حسب المراجع -->
+                    <div class="tab-pane fade" id="byReference">
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead class="table-primary">
+                                    <tr>
+                                        <th colspan="2">مرجع المتعهدة</th>
+                                        <th colspan="2">مرجع التخطيط</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td colspan="2">
+                                            <ul>
+                                            {% set refs = productions|map(attribute='contractor_reference')|select('string')|list %}
+                                            {% for ref in refs if ref %}
+                                                <li>{{ ref }}</li>
+                                            {% else %}
+                                                <li>-</li>
+                                            {% endfor %}
+                                            </ul>
+                                        </td>
+                                        <td colspan="2">
+                                            <ul>
+                                            {% set refs = productions|map(attribute='planning_reference')|select('string')|list %}
+                                            {% for ref in refs if ref %}
+                                                <li>{{ ref }}</li>
+                                            {% else %}
+                                                <li>-</li>
+                                            {% endfor %}
+                                            </ul>
+                                        </td>
+                                    </tr>
+                                </tbody>
                             </table>
                         </div>
                     </div>

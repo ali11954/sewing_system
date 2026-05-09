@@ -76,6 +76,8 @@ class Production(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     worker_name = db.Column(db.String(100))
     temporary_assistant = db.Column(db.String(100))  # مساعدة مؤقتة (إذا وجدت)
+    contractor_reference = db.Column(db.String(50))  # رقم مرجع المتعهدة
+    planning_reference = db.Column(db.String(50))  # رقم مرجع إدارة التخطيط
     is_temporary = db.Column(db.Boolean, default=False)
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.now)
@@ -225,6 +227,8 @@ class Settlement(db.Model):
     total_tax = db.Column(db.Float, default=0.0)
     advance_to_contractor = db.Column(db.Float, default=0.0)  # سلفة المتعهدة
     net_amount = db.Column(db.Float, default=0.0)
+    contractor_references = db.Column(db.String(500), default='-')  # أرقام مراجع المتعهدة
+    planning_references = db.Column(db.String(500), default='-')  # أرقام مراجع التخطيط
     status = db.Column(db.String(20), default='draft')
     created_date = db.Column(db.Date, default=datetime.now)
     created_by = db.Column(db.String(50))

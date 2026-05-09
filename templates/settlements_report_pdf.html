@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+
+    <style>
+        @page {
+            size: A4;
+            margin: 20mm;
+        }
+
+        body {
+            font-family: DejaVu Sans, Arial, sans-serif;
+            direction: rtl;
+            font-size: 13px;
+            color: #000;
+            background: #fff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #444;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+        }
+
+        .header h1 {
+            margin: 0;
+            color: #444;
+            font-size: 24px;
+        }
+
+        .header h3 {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .subject {
+            background: #f5f5f5;
+            padding: 10px;
+            border-right: 5px solid #999;
+            margin-bottom: 20px;
+        }
+
+        .subject h4 {
+            margin: 0;
+        }
+
+        .bag-section {
+            margin-bottom: 25px;
+            page-break-inside: avoid;
+        }
+
+        .bag-title {
+            background: #666;
+            color: white;
+            padding: 8px;
+            font-weight: bold;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+
+        th,
+        td {
+            border: 1px solid #999;
+            padding: 8px;
+            text-align: center;
+        }
+
+        th {
+            background: #888;
+            color: white;
+        }
+
+        .total-row {
+            background: #efefef;
+            font-weight: bold;
+        }
+
+        .summary {
+            margin-top: 20px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 12px;
+        }
+
+        .summary p {
+            margin: 5px 0;
+        }
+
+        .letter-body {
+            margin-top: 30px;
+            line-height: 2;
+        }
+
+        .letter-body p {
+            margin: 10px 0;
+        }
+
+        .signatures {
+            margin-top: 60px;
+            width: 100%;
+        }
+
+        .signature-table {
+            width: 100%;
+            border: none;
+        }
+
+        .signature-table td {
+            border: none;
+            width: 50%;
+            vertical-align: top;
+            text-align: center;
+        }
+
+        .signature-line {
+            margin-top: 60px;
+            border-top: 1px solid #000;
+            padding-top: 8px;
+            width: 80%;
+            margin-right: auto;
+            margin-left: auto;
+        }
+
+        .footer {
+            margin-top: 50px;
+            text-align: center;
+            font-size: 11px;
+            color: #666;
+            border-top: 1px solid #ccc;
+            padding-top: 10px;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1>نظام معمل الخياطات</h1>
+
+        <h3>تقرير مستخلص منتج</h3>
+
+        <p>
+            الفترة:
+            {{ start_date.strftime('%Y-%m-%d') }}
+            إلى
+            {{ end_date.strftime('%Y-%m-%d') }}
+        </p>
+    </div>
+
+    <div class="subject">
+        <h4>
+            سجل الموضوع:
+            مستخلص منتج "{{ bag_names }}"
+        </h4>
+    </div>
+
+    {% for bag_name, rows in grouped_by_bag.items() %}
+
+    <div class="bag-section">
+
+        <div class="bag-title">
+            منتج: {{ bag_name }}
+        </div>
+
+        <table>
+
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>التاريخ</th>
+                    <th>الكمية</th>
+                    <th>الإجمالي</th>
+                    <th>مرجع المتعهدة</th>
+                    <th>مرجع التخطيط</th>
+                </tr>
+            </thead>
+
+            <tbody>
+
+                {% for row in rows %}
+                <tr>
+
+                    <td>{{ loop.index }}</td>
+
+                    <td>
+                        {{ row.date.strftime('%Y-%m-%d') if row.date else '' }}
+                    </td>
+
+                    <td>
+                        {{ row.quantity|round|int }}
+                    </td>
+
+                    <td>
+                        {{ "%.2f"|format(row.amount or 0) }}
+                    </td>
+
+                    <td>
+                        {{ row.contractor_reference or '—' }}
+                    </td>
+
+                    <td>
+                        {{ row.planning_reference or '—' }}
+                    </td>
+
+                </tr>
+                {% endfor %}
+
+            </tbody>
+
+            <tfoot>
+                <tr class="total-row">
+
+                    <td colspan="2">
+                        إجمالي {{ bag_name }}
+                    </td>
+
+                    <td>
+                        {{ rows|sum(attribute='quantity')|round|int }}
+                    </td>
+
+                    <td>
+                        {{ "%.2f"|format(rows|sum(attribute='amount')) }}
+                    </td>
+
+                    <td colspan="2"></td>
+
+                </tr>
+            </tfoot>
+
+        </table>
+
+    </div>
+
+    {% endfor %}
+
+    <div class="summary">
+
+        <p>
+            <strong>ملخص التقرير</strong>
+        </p>
+
+        <p>
+            إجمالي الكمية:
+            {{ grand_total_quantity|round|int }} كيس
+        </p>
+
+        <p>
+            إجمالي المبلغ:
+            {{ "%.2f"|format(grand_total_amount or 0) }} ريال
+        </p>
+
+    </div>
+
+    <div class="letter-body">
+
+        <p>
+            <strong>
+                سعادة الأخ المدير المالي المحترم
+            </strong>
+        </p>
+
+        <p>
+            السلام عليكم ورحمة الله وبركاته،،،
+        </p>
+
+        <p>
+            إشارة إلى الموضوع أعلاه،
+            يرجى التكرم بصرف أجور خياطة أكياس
+            <strong>{{ bag_names }}</strong>
+            للكميات الموضحة أعلاه والخاصة بالمقاول / عراقية زيلعي.
+        </p>
+
+        <p>
+            مع خالص الشكر والتقدير،،،
+        </p>
+
+    </div>
+
+    <div class="signatures">
+
+        <table class="signature-table">
+
+            <tr>
+
+                <td>
+
+                    <div class="signature-line"></div>
+
+                    <p>
+                        <strong>المختص</strong>
+                    </p>
+
+                    <p>
+                        التوقيع: __________________
+                    </p>
+
+                    <p>
+                        التاريخ:
+                        {{ current_datetime.strftime('%Y-%m-%d') }}
+                    </p>
+
+                </td>
+
+                <td>
+
+                    <div class="signature-line"></div>
+
+                    <p>
+                        <strong>
+                            إدارة الإنتاج والصيانة
+                        </strong>
+                    </p>
+
+                    <p>
+                        التوقيع: __________________
+                    </p>
+
+                    <p>
+                        التاريخ: __________________
+                    </p>
+
+                </td>
+
+            </tr>
+
+        </table>
+
+    </div>
+
+    <div class="footer">
+
+        <p>
+            هذا المستخلص صادر من نظام معمل الخياطات
+        </p>
+
+        <p>
+            تاريخ الطباعة:
+            {{ current_datetime.strftime('%Y-%m-%d %H:%M:%S') }}
+        </p>
+
+    </div>
+
+</body>
+</html>

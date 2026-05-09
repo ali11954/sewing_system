@@ -1,0 +1,303 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-chart-line"></i> تقرير المستخلصات المتقدم</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- نموذج الفلتر -->
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-filter"></i> إعدادات التقرير
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">من تاريخ</label>
+                        <input type="date" id="startDate" class="form-control" value="{{ start_date.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">إلى تاريخ</label>
+                        <input type="date" id="endDate" class="form-control" value="{{ end_date.strftime('%Y-%m-%d') }}">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">نوع الأصناف</label>
+                        <div class="form-check">
+                            <input type="checkbox" id="selectAll" class="form-check-input">
+                            <label class="form-check-label" for="selectAll">اختيار الكل</label>
+                        </div>
+                        <div id="bagTypesList" style="max-height: 150px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; border-radius: 5px;">
+                            {% for bt in bag_types %}
+                            <div class="form-check">
+                                <input type="checkbox" class="form-check-input bag-checkbox" value="{{ bt.id }}" id="bag_{{ bt.id }}">
+                                <label class="form-check-label" for="bag_{{ bt.id }}">
+                                    {{ bt.full_name }} ({{ "%.2f"|format(bt.price_per_bag) }} ريال)
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-2 mb-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button class="btn btn-primary w-100" onclick="loadReport()">
+                            <i class="fas fa-search"></i> عرض التقرير
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- أزرار التصدير -->
+        <div class="mb-3 text-end" id="exportButtons" style="display: none;">
+            <button class="btn btn-success" onclick="exportToExcel()">
+                <i class="fas fa-file-excel"></i> تصدير إلى Excel
+            </button>
+            <button class="btn btn-danger" onclick="exportToPDFReport()">
+                <i class="fas fa-file-pdf"></i> تصدير إلى PDF
+            </button>
+            <button class="btn btn-secondary" onclick="window.print()">
+                <i class="fas fa-print"></i> طباعة
+            </button>
+        </div>
+
+        <!-- عرض التقرير -->
+        <div class="card" id="reportCard" style="display: none;">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-chart-line"></i> <span id="reportTitle">تقرير المستخلصات</span>
+            </div>
+            <div class="card-body" id="reportContent">
+                <div class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">جاري تحميل التقرير...</p>
+                </div>
+            </div>
+            <div class="card-footer text-muted" id="reportFooter"></div>
+        </div>
+    </div>
+</div>
+
+<!-- مكتبات التصدير -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<script>
+// اختيار الكل
+document.getElementById('selectAll').addEventListener('change', function() {
+    const checkboxes = document.querySelectorAll('.bag-checkbox');
+    checkboxes.forEach(cb => cb.checked = this.checked);
+});
+
+// تحميل التقرير
+async function loadReport() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const selectedBags = Array.from(document.querySelectorAll('.bag-checkbox:checked')).map(cb => cb.value);
+
+    if (!startDate || !endDate) {
+        alert('الرجاء اختيار الفترة');
+        return;
+    }
+
+    document.getElementById('reportCard').style.display = 'block';
+    document.getElementById('reportContent').innerHTML = `
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2">جاري تحميل التقرير...</p>
+        </div>
+    `;
+    document.getElementById('exportButtons').style.display = 'none';
+
+    try {
+        const url = `/api/settlements_report?start_date=${startDate}&end_date=${endDate}&bag_ids=${selectedBags.join(',')}`;
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.success) {
+            renderReport(data.data);
+            document.getElementById('exportButtons').style.display = 'block';
+            document.getElementById('reportTitle').innerHTML = `تقرير المستخلصات - ${startDate} إلى ${endDate}`;
+            document.getElementById('reportFooter').innerHTML = `تم الإنشاء: ${new Date().toLocaleString('ar-EG')}`;
+        } else {
+            document.getElementById('reportContent').innerHTML = `
+                <div class="alert alert-danger">${data.message || 'حدث خطأ في تحميل التقرير'}</div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        document.getElementById('reportContent').innerHTML = `
+            <div class="alert alert-danger">حدث خطأ في الاتصال بالخادم</div>
+        `;
+    }
+}
+
+// عرض التقرير مع تجميع حسب الصنف
+function renderReport(data) {
+    // تجميع البيانات حسب نوع الكيس
+    const groupedByBagType = {};
+
+    for (const row of data.report_rows) {
+        const bagType = row.bag_type;
+        if (!groupedByBagType[bagType]) {
+            groupedByBagType[bagType] = [];
+        }
+        groupedByBagType[bagType].push(row);
+    }
+
+    let html = `
+        <div class="alert alert-info">
+            <div class="row text-center">
+                <div class="col-md-4">
+                    <strong>الفترة:</strong> ${data.start_date} إلى ${data.end_date}
+                </div>
+                <div class="col-md-4">
+                    <strong>عدد الأصناف:</strong> ${Object.keys(groupedByBagType).length}
+                </div>
+                <div class="col-md-4">
+                    <strong>إجمالي الكمية:</strong> <span class="text-success">${data.grand_total_quantity.toLocaleString()} كيس</span>
+                </div>
+            </div>
+            <div class="row text-center mt-2">
+                <div class="col-md-12">
+                    <strong>إجمالي المبلغ:</strong> <span class="text-success">${data.grand_total_amount.toFixed(2)} ريال</span>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // عرض جدول لكل صنف
+    for (const [bagType, rows] of Object.entries(groupedByBagType)) {
+        const bagTotalQuantity = rows.reduce((sum, r) => sum + r.quantity, 0);
+        const bagTotalAmount = rows.reduce((sum, r) => sum + r.amount, 0);
+
+        html += `
+            <div class="card mb-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="fas fa-box"></i> ${bagType}</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover mb-0">
+                            <thead class="table-primary">
+                                <tr>
+                                    <th>#</th>
+                                    <th>التاريخ</th>
+                                    <th>نوع الكيس</th>
+                                    <th>الكمية</th>
+                                    <th>الإجمالي (ريال)</th>
+                                    <th>مرجع المتعهدة</th>
+                                    <th>مرجع التخطيط</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+        `;
+
+        for (let i = 0; i < rows.length; i++) {
+            const row = rows[i];
+            html += `
+                <tr>
+                    <td>${i + 1}</td>
+                    <td>${row.date}</td>
+                    <td>${row.bag_type}</td>
+                    <td class="text-end">${row.quantity.toLocaleString()}</td>
+                    <td class="text-end text-success">${row.amount.toFixed(2)}</td>
+                    <td class="text-center">${row.contractor_reference}</td>
+                    <td class="text-center">${row.planning_reference}</td>
+                </tr>
+            `;
+        }
+
+        html += `
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th colspan="3" class="text-end">إجمالي ${bagType}</th>
+                                    <th class="text-end">${bagTotalQuantity.toLocaleString()} كيس</th>
+                                    <th class="text-end">${bagTotalAmount.toFixed(2)} ريال</th>
+                                    <th colspan="2"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    document.getElementById('reportContent').innerHTML = html;
+}
+
+// تصدير إلى Excel
+function exportToExcel() {
+    const table = document.getElementById('reportTable');
+    if (!table) {
+        alert('لا توجد بيانات للتصدير');
+        return;
+    }
+    const ws = XLSX.utils.table_to_sheet(table);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'تقرير المستخلصات');
+    XLSX.writeFile(wb, `settlements_report_${new Date().toISOString().slice(0,19)}.xlsx`);
+}
+
+// تحميل التقرير تلقائياً عند فتح الصفحة
+document.addEventListener('DOMContentLoaded', function() {
+    loadReport();
+});
+// تصدير إلى PDF رسمي مع النص (تحميل مباشر)
+async function exportToPDFReport() {
+    const startDate = document.getElementById('startDate').value;
+    const endDate = document.getElementById('endDate').value;
+    const selectedBags = Array.from(document.querySelectorAll('.bag-checkbox:checked')).map(cb => cb.value);
+
+    if (!startDate || !endDate) {
+        alert('الرجاء اختيار الفترة');
+        return;
+    }
+
+    // إظهار مؤشر التحميل
+    const exportBtn = event.target;
+    const originalText = exportBtn.innerHTML;
+    exportBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> جاري التحميل...';
+    exportBtn.disabled = true;
+
+    try {
+        // تحميل الملف مباشرة باستخدام fetch
+        const response = await fetch(`/settlements_report_pdf?start_date=${startDate}&end_date=${endDate}&bag_ids=${selectedBags.join(',')}`);
+
+        if (!response.ok) {
+            throw new Error('فشل في تحميل التقرير');
+        }
+
+        // الحصول على blob البيانات
+        const blob = await response.blob();
+
+        // إنشاء رابط تحميل
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `تقرير_المستخلص_${startDate}_${endDate}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+
+        // تنظيف
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+
+        alert('✅ تم تحميل التقرير بنجاح!');
+
+    } catch (error) {
+        console.error('Error:', error);
+        alert('❌ حدث خطأ: ' + error.message);
+    } finally {
+        exportBtn.innerHTML = originalText;
+        exportBtn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

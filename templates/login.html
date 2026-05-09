@@ -1,45 +1,173 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نظام معمل الخياطات - تسجيل الدخول</title>
 
-{% block page_header %}{% endblock %}
+    <!-- Bootstrap 5 RTL -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.rtl.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700&display=swap" rel="stylesheet">
 
-{% block content %}
-<div class="row justify-content-center min-vh-100 align-items-center">
-    <div class="col-md-5 col-lg-4">
-        <div class="card shadow-lg border-0">
-            <div class="card-body p-5">
-                <div class="text-center mb-4">
-                    <i class="fas fa-tshirt fa-4x" style="color: var(--secondary-pink);"></i>
-                    <h3 class="mt-3">نظام معمل الخياطات</h3>
-                    <p class="text-muted">تسجيل الدخول إلى النظام</p>
-                </div>
+    <style>
+        * {
+            font-family: 'Tajawal', sans-serif;
+        }
 
-                <form method="POST">
-                    <div class="mb-3">
-                        <label class="form-label">
-                            <i class="fas fa-user"></i> اسم المستخدم
-                        </label>
-                        <input type="text" class="form-control" name="username" required autofocus>
+        :root {
+            --primary-light: #FDF5F0;
+            --primary-soft: #F7E8E8;
+            --secondary-pink: #E8B4B8;
+            --secondary-lavender: #C9A9C6;
+            --text-dark: #5D4E46;
+            --border-soft: #F0D9D9;
+            --hover-pink: #D4A5A5;
+        }
+
+        body {
+            background: linear-gradient(135deg, var(--primary-light) 0%, var(--primary-soft) 100%);
+            min-height: 100vh;
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        .card {
+            border-radius: 20px;
+            border: none;
+            background-color: white;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .btn-primary {
+            background-color: var(--secondary-pink);
+            border-color: var(--secondary-pink);
+            border-radius: 12px;
+            padding: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--hover-pink);
+            border-color: var(--hover-pink);
+            transform: translateY(-2px);
+        }
+
+        .form-control {
+            border-radius: 12px;
+            border: 1px solid var(--border-soft);
+            padding: 12px 15px;
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus {
+            border-color: var(--secondary-pink);
+            box-shadow: 0 0 0 0.2rem rgba(232, 180, 184, 0.25);
+        }
+
+        .form-label {
+            color: var(--text-dark);
+            font-weight: 500;
+            margin-bottom: 8px;
+        }
+
+        .alert {
+            border-radius: 12px;
+            border: none;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card {
+            animation: fadeInUp 0.6s ease;
+        }
+
+        .fa-tshirt {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        hr {
+            background: linear-gradient(to right, transparent, var(--secondary-pink), transparent);
+            height: 1px;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="row justify-content-center min-vh-100 align-items-center">
+            <div class="col-md-5 col-lg-4">
+                <div class="card shadow-lg border-0">
+                    <div class="card-body p-5">
+                        <div class="text-center mb-4">
+                            <i class="fas fa-tshirt fa-4x" style="color: var(--secondary-pink);"></i>
+                            <h3 class="mt-3" style="color: var(--text-dark);">نظام معمل الخياطات</h3>
+                            <p class="text-muted">تسجيل الدخول إلى النظام</p>
+                        </div>
+
+                        <!-- رسائل فلاش -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                            {% if messages %}
+                                {% for category, message in messages %}
+                                    <div class="alert alert-{{ category if category != 'message' else 'info' }} alert-dismissible fade show" role="alert">
+                                        <i class="fas fa-{% if category == 'success' %}check-circle{% elif category == 'danger' %}exclamation-circle{% else %}info-circle{% endif %}"></i>
+                                        {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+                        {% endwith %}
+
+                        <form method="POST">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-user"></i> اسم المستخدم
+                                </label>
+                                <input type="text" class="form-control" name="username" required autofocus>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="fas fa-lock"></i> كلمة المرور
+                                </label>
+                                <input type="password" class="form-control" name="password" required>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-2">
+                                <i class="fas fa-sign-in-alt"></i> دخول
+                            </button>
+                        </form>
+
+                        <hr class="my-4">
+
+                        <div class="text-center text-muted small">
+                            <i class="fas fa-info-circle"></i> نظام إدارة معمل الخياطات
+                        </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">
-                            <i class="fas fa-lock"></i> كلمة المرور
-                        </label>
-                        <input type="password" class="form-control" name="password" required>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100 py-2">
-                        <i class="fas fa-sign-in-alt"></i> دخول
-                    </button>
-                </form>
-
-                <hr class="my-4">
-
-                <div class="text-center text-muted small">
-                    <i class="fas fa-info-circle"></i> للدخول التجريبي: admin / admin123
                 </div>
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

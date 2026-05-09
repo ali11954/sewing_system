@@ -21,19 +21,14 @@ app.config['TEMPLATES_AUTO_RELOAD'] = False
 DATABASE_URL = os.environ.get('DATABASE_URL')
 
 if DATABASE_URL:
-    # إصلاح URL لـ PostgreSQL (إضافة +psycopg2)
-    if DATABASE_URL.startswith('postgresql://'):
-        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
-        app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-            'connect_args': {
-                'sslmode': 'require',
-                'connect_timeout': 10
-            },
-            'pool_pre_ping': True,
-            'pool_recycle': 3600
-        }
-    else:
-        app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
+    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+        'connect_args': {
+            'sslmode': 'require'
+        },
+        'pool_pre_ping': True,
+        'pool_recycle': 3600
+    }
     print("📊 قاعدة البيانات المستخدمة: PostgreSQL (Supabase)")
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///sewing.db'
@@ -70,7 +65,7 @@ if __name__ == '__main__':
     print("\n" + "=" * 50)
     print("🚀 تشغيل نظام معمل الخياطات")
     print("=" * 50)
-    port = int(os.environ.get('PORT', 5000))
+    port = int(os.environ.get('PORT', 10000))
     print(f"📍 http://0.0.0.0:{port}")
     print("🔑 الدخول: admin / admin123")
     print("=" * 50 + "\n")
