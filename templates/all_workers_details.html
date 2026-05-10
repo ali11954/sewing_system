@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+
+{% block page_header %}
+<div class="row">
+    <div class="col">
+        <h2><i class="fas fa-chart-line"></i> تفاصيل الإنتاج اليومي - جميع العاملات</h2>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <!-- معلومات الملخص -->
+        <div class="card mb-4">
+            <div class="card-header bg-success text-black">
+                <i class="fas fa-chart-line"></i> ملخص فترة التوزيع
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="alert alert-info text-center">
+                            <strong>الفترة</strong><br>
+                            {{ start_date.strftime('%Y-%m-%d') }} إلى {{ end_date.strftime('%Y-%m-%d') }}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="alert alert-info text-center">
+                            <strong>تاريخ الطباعة</strong><br>
+                            {{ current_datetime.strftime('%Y-%m-%d %H:%M:%S') }}
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="alert alert-info text-center">
+                            <strong>إجمالي المبلغ</strong><br>
+                            <span class="text-success fw-bold">{{ "%.2f"|format(total_net_amount) }} ريال</span>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="alert alert-info text-center">
+                            <strong>إجمالي العاملات</strong><br>
+                            <span class="fw-bold">{{ total_workers }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col text-center">
+                        <a href="{{ url_for('distribute_salaries') }}?start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}"
+                           class="btn btn-secondary">
+                            <i class="fas fa-arrow-right"></i> العودة
+                        </a>
+                        <button type="button" class="btn btn-primary" onclick="window.print()">
+                            <i class="fas fa-print"></i> طباعة الكل
+                        </button>
+                        <a href="{{ url_for('all_workers_details_pdf') }}?start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}"
+                           class="btn btn-danger" target="_blank">
+                            <i class="fas fa-file-pdf"></i> تصدير إلى PDF
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- عرض المكائن -->
+        {% set items_per_page = 1 %}
+        {% set total_pages = (machines_data|length + items_per_page - 1) // items_per_page %}
+        {% set current_page = request.args.get('page', 1)|int %}
+        {% set start_idx = (current_page - 1) * items_per_page %}
+        {% set end_idx = start_idx + items_per_page %}
+        {% set machines_list = machines_data.items()|list %}
+
+        {% for idx in range(start_idx, end_idx) %}
+            {% if idx < machines_list|length %}
+            {% set machine_code, machine_data = machines_list[idx] %}
+            <div class="card mb-4 page-break">
+                <div class="card-header bg-primary text-black">
+                    <h4><i class="fas fa-microchip"></i> المكينة: {{ machine_code }} - {{ machine_data.machine_name }}</h4>
+                </div>
+                <div class="card-body">
+<!-- جدول توزيع الأجور -->
+<div class="card mb-3">
+    <div class="card-header bg-info text-black">
+        <h5><i class="fas fa-users"></i> توزيع الأجور (نصف للخياطات - نصف للمساعدات)</h5>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover">
+                <thead class="table-dark">
+                    <tr>
+                        <th>#</th>
+                        <th>الفئة</th>
+                        <th>الاسم</th>
+                        <th>الكمية</th>
+                        <th>إجمالي الإنتاج الفعلي</th>
+                        <th>نسبة العمل</th>
+                        <th> اجمالي الصافي</th>
+                        <th>السلف</th>
+                        <th class="bg-success">الصافي المستحق</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for worker in machine_data.workers %}
+                    <tr class="{% if worker.category == 'خياطة' %}table-success{% else %}table-info{% endif %}">
+                        <td class="text-center">{{ loop.index }}</td>
+                        <td class="text-center">
+                            <strong>{{ worker.category }}</strong>
+                            <br><small>{{ worker.type }}</small>
+                        </td>
+                        <td>{{ worker.name }}</td>
+                        <td class="text-center">{{ "{:,.0f}".format(worker.work_quantity) }}</td>
+                        <td class="text-primary fw-bold">{{ "{:,.2f}".format(worker.work_amount) }} ريال</td>
+                        <td class="text-center">{{ "%.1f"|format(worker.work_percentage) }}%</td>
+                        <td class="text-info">{{ "{:,.2f}".format(worker.share) }} ريال</td>
+                        <td class="text-danger">{{ "{:,.2f}".format(worker.advances) }} ريال</td>
+                        <td class="text-success fw-bold bg-light">{{ "{:,.2f}".format(worker.net) }} ريال</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+
+                    <!-- إجمالي المكينة -->
+                    <tr class="table-secondary">
+                        <th colspan="5" class="text-end">إجمالي المكينة</th>
+                        <th class="text-primary fw-bold">100%</th>
+                        <th class="text-info">
+                            {{ "{:,.2f}".format(machine_data.total_share) }} ريال
+                        </th>
+                        <th class="text-danger">
+                            {{ "{:,.2f}".format(machine_data.total_advances) }} ريال
+                        </th>
+                        <th class="text-success fw-bold">
+                            {{ "{:,.2f}".format(machine_data.total_net) }} ريال
+                        </th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+                    <!-- جدول الإنتاج اليومي -->
+                    <h6 class="mt-3"><i class="fas fa-calendar-day"></i> الإنتاج اليومي:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>التاريخ</th>
+                                    <th>اليوم</th>
+                                    <th>نوع الكيس</th>
+                                    <th>الكمية</th>
+                                    <th>الإجمالي</th>
+                                    <th>مساعدة مؤقتة</th>
+                                    <th>مرجع المتعهدة</th>
+                                    <th>مرجع التخطيط</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% set counter = 0 %}
+                                {% for day in machine_data.daily_productions %}
+                                    {% for product in day.products %}
+                                    {% set counter = counter + 1 %}
+                                    <tr>
+                                        <td class="text-center">{{ counter }}</td>
+                                        <td>{{ day.date.strftime('%Y-%m-%d') }}</td>
+                                        <td>{{ day.day_name }}</td>
+                                        <td>{{ product.bag_type }}</td>
+                                        <td class="text-primary">{{ "{:,.0f}".format(product.quantity) }}</td>
+                                        <td class="text-success">{{ "{:,.2f}".format(product.amount) }} ريال</td>
+                                        <td>{{ product.temp_assistant }}</td>
+                                        <td>{{ product.contractor_reference }}</td>
+                                        <td>{{ product.planning_reference }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-secondary">
+                                <tr>
+                                    <th colspan="4" class="text-end">الإجمالي الكلي</th>
+                                    <th class="text-primary">{{ "{:,.0f}".format(machine_data.total_quantity) }}</th>
+                                    <th class="text-success">{{ "{:,.2f}".format(machine_data.total_amount) }} ريال</th>
+                                    <th colspan="3"></th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <!-- ملخص الخصومات -->
+                    <div class="row mt-3">
+                        <div class="col-md-12">
+                            <div class="alert alert-warning">
+                                <h6><i class="fas fa-calculator"></i> ملخص الخصومات (تُخصم مرة واحدة من إجمالي الإنتاج):</h6>
+                                <div class="row">
+                                    <div class="col-md-3">
+                                        <strong>عمولة المتعهدة:</strong> {{ "{:,.2f}".format(machine_data.commission) }} ريال
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>التأمينات:</strong> {{ "{:,.2f}".format(machine_data.insurance) }} ريال
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>الضرائب:</strong> {{ "{:,.2f}".format(machine_data.tax) }} ريال
+                                    </div>
+                                    <div class="col-md-3">
+                                        <strong>إجمالي الخصومات:</strong> {{ "{:,.2f}".format(machine_data.commission + machine_data.insurance + machine_data.tax) }} ريال
+                                    </div>
+                                </div>
+                                <div class="row mt-2">
+                                    <div class="col-md-12">
+                                        <strong>صافي المكينة بعد الخصومات:</strong> {{ "{:,.2f}".format(machine_data.net_payable) }} ريال
+                                        <br>
+                                        <small class="text-muted">(يُقسم 50% للخياطات و 50% للمساعدات حسب نسبة عمل كل منهم)</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        {% endfor %}
+
+        <!-- Pagination -->
+        {% if total_pages > 1 %}
+        <nav aria-label="Page navigation" class="mt-3">
+            <ul class="pagination justify-content-center">
+                <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
+                    <a class="page-link" href="?page={{ current_page - 1 }}&start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}">
+                        <i class="fas fa-chevron-right"></i> السابق
+                    </a>
+                </li>
+                {% for p in range(1, total_pages + 1) %}
+                    {% if p == 1 or p == total_pages or (p >= current_page - 2 and p <= current_page + 2) %}
+                    <li class="page-item {% if p == current_page %}active{% endif %}">
+                        <a class="page-link" href="?page={{ p }}&start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}">
+                            {{ p }}
+                        </a>
+                    </li>
+                    {% elif p == current_page - 3 or p == current_page + 3 %}
+                    <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {% if current_page == total_pages %}disabled{% endif %}">
+                    <a class="page-link" href="?page={{ current_page + 1 }}&start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}">
+                        التالي <i class="fas fa-chevron-left"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
+
+        <!-- التوقيعات -->
+        <div class="card mt-4">
+            <div class="card-header bg-secondary text-black">
+                <i class="fas fa-signature"></i> التوقيعات
+            </div>
+            <div class="card-body">
+                <div class="row text-center">
+                    <div class="col-md-4">
+                        <div style="border-top: 1px solid #000; width: 80%; margin: 30px auto 10px auto;"></div>
+                        <p><strong>المختص</strong></p>
+                        <p>التوقيع: __________________</p>
+                        <p>التاريخ: __________________</p>
+                    </div>
+                    <div class="col-md-4">
+                        <div style="border-top: 1px solid #000; width: 80%; margin: 30px auto 10px auto;"></div>
+                        <p><strong>مدير الإنتاج</strong></p>
+                        <p>التوقيع: __________________</p>
+                        <p>التاريخ: __________________</p>
+                    </div>
+                    <div class="col-md-4">
+                        <div style="border-top: 1px solid #000; width: 80%; margin: 30px auto 10px auto;"></div>
+                        <p><strong>المدير المالي</strong></p>
+                        <p>التوقيع: __________________</p>
+                        <p>التاريخ: __________________</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+@media print {
+    .page-break {
+        page-break-before: always;
+    }
+    .btn, nav {
+        display: none;
+    }
+    .card {
+        break-inside: avoid;
+    }
+}
+</style>
+{% endblock %}

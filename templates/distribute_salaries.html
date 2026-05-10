@@ -44,64 +44,107 @@
                         </button>
                     </div>
                 </form>
+
+                <!-- أزرار الإجراءات -->
+                <div class="row mt-3">
+                    <div class="col">
+                        <div class="btn-group">
+                            <button type="button" class="btn btn-danger" id="exportPdfBtn">
+                                <i class="fas fa-file-pdf"></i> تصدير إلى PDF
+                            </button>
+                            <button type="button" class="btn btn-info" id="showAllDetailsBtn">
+                                <i class="fas fa-chart-line"></i> تفاصيل الكل
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
         {% if workers_data %}
-        <!-- جدول توزيع الأجور -->
+        <!-- إحصائيات سريعة -->
+        <div class="row mb-3">
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>إجمالي العاملات</h5>
+                        <h3>{{ total_workers }}</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>إجمالي المبلغ</h5>
+                        <h3 class="text-success">{{ "%.2f"|format(total_net_amount) }} ريال</h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h5>الصفحة الحالية</h5>
+                        <h3>{{ current_page }} / {{ total_pages }}</h3>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- عرض الخياطات فقط (بدون مساعدات) -->
         <div class="card">
-            <div class="card-header bg-primary text-white">
-                <i class="fas fa-users"></i> توزيع الأجور
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <span><i class="fas fa-users"></i> توزيع أجور الخياطات - مرتب حسب رقم المكينة</span>
+                <span class="badge bg-light text-dark">عرض {{ workers_data|selectattr('is_assistant', 'equalto', false)|list|length }} من {{ total_workers }} عاملة</span>
             </div>
             <div class="card-body">
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle"></i>
-                    <strong>إجمالي المبلغ المتاح للتوزيع:</strong> {{ "%.2f"|format(total_net_amount) }} ريال
+                    <strong>إجمالي المبلغ المتاح للتوزيع:</strong> {{ "%.2f"|format(workers_data|selectattr('is_assistant', 'equalto', false)|sum(attribute='net_amount')) }} ريال
                 </div>
 
                 <form method="POST" id="distributeForm">
                     <div class="table-responsive">
-                        <table class="table table-bordered table-hover">
+                        <table class="table table-bordered table-hover table-sm">
                             <thead class="table-light">
                                 <tr>
                                     <th>#</th>
+                                    <th>رقم المكينة</th>
+                                    <th>اسم المكينة</th>
                                     <th>اسم الخياطة</th>
                                     <th>النوع</th>
-                                    <th>إجمالي الأجور</th>
-                                    <th>عمولة المتعهدة</th>
-                                    <th>التأمينات</th>
-                                    <th>الضرائب</th>
-                                    <th>إجمالي الخصومات</th>
+                                    <th>إجمالي الإنتاج</th>
                                     <th>السلف</th>
-                                    <th>المستحق</th>
+                                    <th>الصافي</th>
                                     <th>المبلغ المدفوع</th>
                                     <th>طريقة الدفع</th>
                                     <th>رقم الإيصال</th>
-                                    <th></th>
+                                    <th>الإجراءات</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {% for worker in workers_data %}
+                                {% for worker in workers_data if not worker.is_assistant %}
                                 <tr>
-                                    <td>{{ loop.index }}</td>
+                                    <td>{{ loop.index + (current_page - 1) * per_page }}.{# العد المعدل #}
+                                    <td>
+                                        <strong>{{ worker.machine_code }}</strong>
+                                        <input type="hidden" name="worker_machine_{{ loop.index }}" value="{{ worker.machine_code }}">
+                                    </td>
+                                    <td>{{ worker.machine_name }}</td>
                                     <td>
                                         {{ worker.name }}
                                         <input type="hidden" name="worker_name_{{ loop.index }}" value="{{ worker.name }}">
+                                        <input type="hidden" name="worker_type_{{ loop.index }}" value="{{ worker.type }}">
                                     </td>
                                     <td>
-                                        {% if worker.type == 'permanent' %}
-                                        <span class="badge bg-success">دائمة</span>
+                                        {% if 'خياطة رئيسية' in worker.type %}
+                                        <span class="badge bg-success">خياطة رئيسية</span>
                                         {% else %}
-                                        <span class="badge bg-warning">مؤقتة</span>
+                                        <span class="badge bg-warning">خياطة مؤقتة</span>
                                         {% endif %}
                                     </td>
-                                    <td class="text-success">{{ "%.2f"|format(worker.total_amount) }}</td>
-                                    <td class="text-danger">{{ "%.2f"|format(worker.commission) }}</td>
-                                    <td class="text-danger">{{ "%.2f"|format(worker.insurance) }}</td>
-                                    <td class="text-danger">{{ "%.2f"|format(worker.tax) }}</td>
-                                    <td class="text-danger fw-bold">{{ "%.2f"|format(worker.deductions) }}</td>
-                                    <td class="text-danger">{{ "%.2f"|format(worker.total_advances) }}</td>
-                                    <td class="text-primary fw-bold">{{ "%.2f"|format(worker.net_amount) }}</td>
+                                    <td class="text-primary fw-bold">{{ "%.2f"|format(worker.total_amount) }} ريال</td>
+                                    <td class="text-danger">{{ "%.2f"|format(worker.total_advances) }} ريال</td>
+                                    <td class="text-success fw-bold">{{ "%.2f"|format(worker.net_amount) }} ريال</td>
                                     <td>
                                         <input type="number" step="0.01" name="amount_{{ loop.index }}"
                                                class="form-control amount-input" data-net="{{ worker.net_amount }}"
@@ -116,35 +159,80 @@
                                     </td>
                                     <td>
                                         <input type="text" name="receipt_{{ loop.index }}" class="form-control"
-                                               placeholder="رقم الإيصال" style="width: 120px;">
+                                               placeholder="رقم الإيصال" style="width: 100px;">
                                     </td>
-                                    <td>
-                                        <button type="button" class="btn btn-sm btn-success distribute-one"
-                                                data-index="{{ loop.index }}" data-name="{{ worker.name }}"
-                                                data-amount="{{ worker.net_amount }}">
-                                            <i class="fas fa-money-bill"></i> صرف
-                                        </button>
+                                    <td class="text-center">
+                                        <div class="btn-group-vertical btn-group-sm" role="group">
+                                            <a href="{{ url_for('all_workers_details',
+                                                       worker_name=worker.name,
+                                                       machine_code=worker.machine_code) }}?start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}"
+                                               class="btn btn-info btn-sm" target="_blank">
+                                                <i class="fas fa-chart-line"></i> تفاصيل
+                                            </a>
+                                            <button type="button" class="btn btn-success distribute-one mt-1"
+                                                    data-index="{{ loop.index }}" data-name="{{ worker.name }}"
+                                                    data-amount="{{ worker.net_amount }}"
+                                                    data-machine="{{ worker.machine_code }}">
+                                                <i class="fas fa-money-bill"></i> صرف
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                             <tfoot class="table-secondary">
                                 <tr>
-                                    <th colspan="9" class="text-end">الإجمالي:</th>
-                                    <th id="totalNet">{{ "%.2f"|format(total_net_amount) }}</th>
-                                    <th id="totalPaid">0.00</th>
-                                    <th colspan="3"></th>
+                                    <th colspan="8" class="text-end">إجمالي الصفحة:</th>
+                                    <th id="pageTotal">{{ "%.2f"|format(workers_data|selectattr('is_assistant', 'equalto', false)|sum(attribute='net_amount')) }}</th>
+                                    <th id="pagePaid">0.00</th>
+                                    <th colspan="2"></th>
+                                </tr>
+                                <tr>
+                                    <th colspan="8" class="text-end">الإجمالي الكلي:</th>
+                                    <th colspan="2">{{ "%.2f"|format(total_net_amount) }} ريال</th>
+                                    <th colspan="2"></th>
                                 </tr>
                             </tfoot>
                         </table>
                     </div>
 
+                    <!-- Pagination Controls -->
+                    {% if total_pages > 1 %}
+                    <nav aria-label="Page navigation" class="mt-3">
+                        <ul class="pagination justify-content-center">
+                            <li class="page-item {% if current_page == 1 %}disabled{% endif %}">
+                                <a class="page-link" href="?page={{ current_page - 1 }}&start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}&settlement_id={{ settlement.id if settlement else '' }}">
+                                    <i class="fas fa-chevron-right"></i> السابق
+                                </a>
+                            </li>
+
+                            {% for p in range(1, total_pages + 1) %}
+                                {% if p == 1 or p == total_pages or (p >= current_page - 2 and p <= current_page + 2) %}
+                                <li class="page-item {% if p == current_page %}active{% endif %}">
+                                    <a class="page-link" href="?page={{ p }}&start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}&settlement_id={{ settlement.id if settlement else '' }}">
+                                        {{ p }}
+                                    </a>
+                                </li>
+                                {% elif p == current_page - 3 or p == current_page + 3 %}
+                                <li class="page-item disabled"><span class="page-link">...</span></li>
+                                {% endif %}
+                            {% endfor %}
+
+                            <li class="page-item {% if current_page == total_pages %}disabled{% endif %}">
+                                <a class="page-link" href="?page={{ current_page + 1 }}&start_date={{ start_date.strftime('%Y-%m-%d') }}&end_date={{ end_date.strftime('%Y-%m-%d') }}&settlement_id={{ settlement.id if settlement else '' }}">
+                                    التالي <i class="fas fa-chevron-left"></i>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+                    {% endif %}
+
                     <div class="text-center mt-3">
-                        <button type="button" class="btn btn-success btn-lg" id="distributeAllBtn">
-                            <i class="fas fa-hand-holding-heart"></i> توزيع الكل
+                        <button type="button" class="btn btn-success btn-lg" id="distributePageBtn">
+                            <i class="fas fa-hand-holding-heart"></i> توزيع أجور هذه الصفحة
                         </button>
-                        <button type="reset" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-undo"></i> إعادة تعيين
+                        <button type="button" class="btn btn-warning btn-lg" id="distributeAllBtn">
+                            <i class="fas fa-hand-holding-heart"></i> توزيع جميع الأجور
                         </button>
                     </div>
                 </form>
@@ -158,7 +246,7 @@
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover">
+                    <table class="table table-sm table-hover">
                         <thead>
                             <tr>
                                 <th>التاريخ</th>
@@ -179,7 +267,7 @@
                                     {% if payment.payment_method == 'cash' %}نقدي
                                     {% elif payment.payment_method == 'bank' %}تحويل بنكي
                                     {% else %}شيك{% endif %}
-                                  </td>
+                                </td>
                                 <td>{{ payment.receipt_number or '-' }}</td>
                                 <td>
                                     {% if payment.is_signed %}
@@ -187,7 +275,7 @@
                                     {% else %}
                                     <span class="badge bg-warning">غير موقعة</span>
                                     {% endif %}
-                                  </td>
+                                </td>
                             </tr>
                             {% else %}
                             <tr>
@@ -208,26 +296,31 @@
 </div>
 
 <script>
-// تحديث الإجمالي المدفوع
-function updateTotalPaid() {
+// تحديث إجمالي الصفحة المدفوع
+function updatePageTotal() {
     let total = 0;
     document.querySelectorAll('.amount-input').forEach(input => {
         total += parseFloat(input.value) || 0;
     });
-    document.getElementById('totalPaid').textContent = total.toFixed(2);
+    document.getElementById('pagePaid').textContent = total.toFixed(2);
 }
 
 // الاستماع لتغييرات المبالغ
 document.querySelectorAll('.amount-input').forEach(input => {
     input.addEventListener('change', function() {
         const net = parseFloat(this.dataset.net);
-        if (parseFloat(this.value) > net) {
-            alert('المبلغ المدفوع لا يمكن أن يتجاوز المستحق');
+        const val = parseFloat(this.value);
+        if (val > net) {
+            alert('⚠️ المبلغ المدفوع لا يمكن أن يتجاوز المستحق');
             this.value = net.toFixed(2);
+        } else if (val < 0) {
+            alert('⚠️ المبلغ لا يمكن أن يكون سالباً');
+            this.value = 0;
         }
-        updateTotalPaid();
+        updatePageTotal();
     });
 });
+
 // توزيع لخياطة واحدة
 document.querySelectorAll('.distribute-one').forEach(btn => {
     btn.addEventListener('click', async function() {
@@ -237,16 +330,17 @@ document.querySelectorAll('.distribute-one').forEach(btn => {
         const method = document.querySelector(`select[name="method_${index}"]`).value;
         const receipt = document.querySelector(`input[name="receipt_${index}"]`).value;
 
-        // الحصول على التواريخ من نموذج الفلتر
         const startDate = document.querySelector('input[name="start_date"]').value;
         const endDate = document.querySelector('input[name="end_date"]').value;
 
         if (parseFloat(amount) <= 0) {
-            alert('الرجاء إدخال مبلغ صحيح');
+            alert('⚠️ الرجاء إدخال مبلغ صحيح أكبر من صفر');
             return;
         }
 
         if (confirm(`هل أنت متأكد من صرف مبلغ ${amount} ريال للخياطة ${name}؟`)) {
+            showLoading(true);
+
             const response = await fetch('/api/distribute-salary', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -261,6 +355,8 @@ document.querySelectorAll('.distribute-one').forEach(btn => {
             });
 
             const data = await response.json();
+            showLoading(false);
+
             if (data.success) {
                 alert('✅ تم تسجيل الدفع بنجاح');
                 location.reload();
@@ -270,39 +366,123 @@ document.querySelectorAll('.distribute-one').forEach(btn => {
         }
     });
 });
-// توزيع الكل
-document.getElementById('distributeAllBtn').addEventListener('click', async function() {
-    const totalNet = parseFloat(document.getElementById('totalNet').textContent);
-    if (confirm(`هل أنت متأكد من توزيع جميع المبالغ (${totalNet.toFixed(2)} ريال)؟`)) {
-        const workers = [];
-        document.querySelectorAll('.amount-input').forEach((input, idx) => {
-            const amount = parseFloat(input.value);
-            if (amount > 0) {
-                workers.push({
-                    name: document.querySelector(`input[name="worker_name_${idx+1}"]`).value,
-                    amount: amount,
-                    method: document.querySelector(`select[name="method_${idx+1}"]`).value,
-                    receipt: document.querySelector(`input[name="receipt_${idx+1}"]`).value
-                });
-            }
-        });
+
+// توزيع أجور الصفحة الحالية فقط
+document.getElementById('distributePageBtn').addEventListener('click', async function() {
+    const workers = [];
+    const inputs = document.querySelectorAll('.amount-input');
+
+    inputs.forEach((input, idx) => {
+        const amount = parseFloat(input.value);
+        if (amount > 0) {
+            const index = idx + 1;
+            workers.push({
+                name: document.querySelector(`input[name="worker_name_${index}"]`).value,
+                machine_code: document.querySelector(`input[name="worker_machine_${index}"]`).value,
+                amount: amount,
+                method: document.querySelector(`select[name="method_${index}"]`).value,
+                receipt: document.querySelector(`input[name="receipt_${index}"]`).value
+            });
+        }
+    });
+
+    if (workers.length === 0) {
+        alert('⚠️ لا توجد مبالغ للصرف في هذه الصفحة');
+        return;
+    }
+
+    const totalAmount = workers.reduce((sum, w) => sum + w.amount, 0);
+
+    if (confirm(`هل أنت متأكد من توزيع أجور ${workers.length} خياطة بمبلغ إجمالي ${totalAmount.toFixed(2)} ريال؟`)) {
+        showLoading(true);
 
         const response = await fetch('/api/distribute-all-salaries', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workers: workers })
+            body: JSON.stringify({ workers: workers, scope: 'page' })
         });
 
         const data = await response.json();
+        showLoading(false);
+
         if (data.success) {
-            alert('تم توزيع جميع المبالغ بنجاح');
+            alert(`✅ تم توزيع أجور ${workers.length} خياطة بنجاح`);
             location.reload();
         } else {
-            alert('حدث خطأ: ' + data.message);
+            alert('❌ حدث خطأ: ' + data.message);
         }
     }
 });
 
-updateTotalPaid();
+// توزيع جميع الأجور (كل الصفحات)
+document.getElementById('distributeAllBtn').addEventListener('click', async function() {
+    const totalNet = parseFloat('{{ total_net_amount }}');
+
+    if (totalNet <= 0) {
+        alert('⚠️ لا توجد مبالغ للصرف');
+        return;
+    }
+
+    if (confirm(`⚠️ هذا سيوزع جميع الأجور (${totalNet.toFixed(2)} ريال) لجميع الخياطات في كل الصفحات. هل أنت متأكد؟`)) {
+        showLoading(true);
+
+        const response = await fetch('/api/distribute-all-workers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                start_date: '{{ start_date.strftime("%Y-%m-%d") }}',
+                end_date: '{{ end_date.strftime("%Y-%m-%d") }}'
+            })
+        });
+
+        const data = await response.json();
+        showLoading(false);
+
+        if (data.success) {
+            alert(`✅ تم توزيع أجور ${data.count} خياطة بنجاح بمبلغ إجمالي ${data.total.toFixed(2)} ريال`);
+            location.reload();
+        } else {
+            alert('❌ حدث خطأ: ' + data.message);
+        }
+    }
+});
+
+// إظهار/إخفاء مؤشر التحميل
+function showLoading(show) {
+    let loader = document.getElementById('loadingOverlay');
+    if (!loader) {
+        loader = document.createElement('div');
+        loader.id = 'loadingOverlay';
+        loader.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:9999; display:flex; align-items:center; justify-content:center;';
+        loader.innerHTML = '<div class="spinner-border text-light" style="width:3rem; height:3rem;" role="status"><span class="visually-hidden">جاري التحميل...</span></div>';
+        document.body.appendChild(loader);
+    }
+    loader.style.display = show ? 'flex' : 'none';
+}
+
+// تصدير إلى PDF
+document.getElementById('exportPdfBtn').addEventListener('click', function() {
+    const startDate = document.querySelector('input[name="start_date"]').value;
+    const endDate = document.querySelector('input[name="end_date"]').value;
+    const settlementId = document.querySelector('select[name="settlement_id"]').value;
+
+    let url = `/distribute_salaries_pdf?start_date=${startDate}&end_date=${endDate}`;
+    if (settlementId) {
+        url += `&settlement_id=${settlementId}`;
+    }
+
+    window.open(url, '_blank');
+});
+
+// زر تفاصيل الكل
+document.getElementById('showAllDetailsBtn').addEventListener('click', function() {
+    const startDate = document.querySelector('input[name="start_date"]').value;
+    const endDate = document.querySelector('input[name="end_date"]').value;
+
+    // فتح صفحة جديدة لعرض تفاصيل الكل
+    window.open(`/all_workers_details?start_date=${startDate}&end_date=${endDate}`, '_blank');
+});
+
+updatePageTotal();
 </script>
 {% endblock %}

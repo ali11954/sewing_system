@@ -1,154 +1,311 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
 
+    <title>
+        تقرير مستخلص - {{ bag_names }}
+    </title>
+
     <style>
+
         @page {
             size: A4;
-            margin: 20mm;
+            margin: 18mm 15mm;
         }
 
         body {
-            font-family: DejaVu Sans, Arial, sans-serif;
+
+            font-family:
+                "DejaVu Sans",
+                sans-serif;
+
             direction: rtl;
-            font-size: 13px;
+
+            unicode-bidi: embed;
+
+            font-size: 12px;
+
+            line-height: 1.6;
+
             color: #000;
+
             background: #fff;
+
+            margin: 0;
+            padding: 0;
         }
 
         * {
             box-sizing: border-box;
         }
 
+        /* =========================
+           HEADER
+        ========================= */
+
         .header {
+
             text-align: center;
+
             border-bottom: 2px solid #444;
-            margin-bottom: 20px;
+
             padding-bottom: 10px;
+
+            margin-bottom: 10px;
         }
 
         .header h1 {
+
             margin: 0;
-            color: #444;
+
             font-size: 24px;
+
+            color: #333;
         }
 
         .header h3 {
-            margin: 5px 0;
+
+            margin: 6px 0;
+
+            font-size: 16px;
+
             color: #666;
         }
 
+        .header p {
+
+            margin: 5px 0 0;
+        }
+
+        /* =========================
+           SUBJECT
+        ========================= */
+
         .subject {
+
             background: #f5f5f5;
-            padding: 10px;
-            border-right: 5px solid #999;
-            margin-bottom: 20px;
+
+            border-right: 5px solid #777;
+
+            padding: 10px 15px;
+
+            margin-bottom: 10px;
         }
 
         .subject h4 {
+
             margin: 0;
+
+            font-size: 14px;
         }
 
+        /* =========================
+           BAG SECTION
+        ========================= */
+
         .bag-section {
-            margin-bottom: 25px;
-            page-break-inside: avoid;
+
+            margin-bottom: 30px;
         }
 
         .bag-title {
+
             background: #666;
-            color: white;
-            padding: 8px;
+
+            color: #fff;
+
+            padding: 8px 12px;
+
             font-weight: bold;
+
+            font-size: 13px;
         }
 
+        /* =========================
+           TABLE
+        ========================= */
+
         table {
+
             width: 100%;
+
             border-collapse: collapse;
-            margin-top: 10px;
+
+            margin-top: 5px;
+
+            table-layout: fixed;
+        }
+
+        thead {
+            display: table-header-group;
+        }
+
+        tfoot {
+            display: table-row-group;
+        }
+
+        tr {
+            page-break-inside: avoid;
         }
 
         th,
         td {
+
             border: 1px solid #999;
-            padding: 8px;
+
+            padding: 7px 5px;
+
             text-align: center;
+
+            vertical-align: middle;
+
+            word-wrap: break-word;
         }
 
         th {
+
             background: #888;
-            color: white;
+
+            color: #fff;
+
+            font-weight: bold;
+
+            font-size: 12px;
+        }
+
+        td {
+            font-size: 11px;
         }
 
         .total-row {
+
             background: #efefef;
+
             font-weight: bold;
         }
 
+        /* =========================
+           SUMMARY
+        ========================= */
+
         .summary {
-            margin-top: 20px;
+
+            margin-top: 25px;
+
             background: #f9f9f9;
+
             border: 1px solid #ddd;
-            padding: 12px;
+
+            padding: 12px 15px;
         }
 
         .summary p {
+
             margin: 5px 0;
         }
 
+        /* =========================
+           LETTER BODY
+        ========================= */
+
         .letter-body {
+
             margin-top: 30px;
+
             line-height: 2;
         }
 
         .letter-body p {
+
             margin: 10px 0;
         }
 
+        /* =========================
+           SIGNATURES
+        ========================= */
+
         .signatures {
-            margin-top: 60px;
-            width: 100%;
+
+            margin-top: 20px;
+
+            page-break-inside: avoid;
         }
 
         .signature-table {
+
             width: 100%;
+
             border: none;
         }
 
         .signature-table td {
+
             border: none;
+
             width: 50%;
+
             vertical-align: top;
+
             text-align: center;
+
+            padding: 0 20px;
         }
 
         .signature-line {
-            margin-top: 60px;
+
+            margin-top: 20px;
+
             border-top: 1px solid #000;
+
             padding-top: 8px;
+
             width: 80%;
+
             margin-right: auto;
+
             margin-left: auto;
         }
 
+        /* =========================
+           FOOTER
+        ========================= */
+
         .footer {
-            margin-top: 50px;
-            text-align: center;
-            font-size: 11px;
-            color: #666;
+
+            margin-top: 20px;
+
             border-top: 1px solid #ccc;
+
             padding-top: 10px;
+
+            text-align: center;
+
+            font-size: 10px;
+
+            color: #666;
         }
 
     </style>
+
 </head>
 
 <body>
 
-    <div class="header">
-        <h1>نظام معمل الخياطات</h1>
+    <!-- =========================
+         HEADER
+    ========================== -->
 
-        <h3>تقرير مستخلص منتج</h3>
+    <div class="header">
+
+        <h1>
+            نظام معمل الخياطات
+        </h1>
+
+        <h3>
+            تقرير مستخلص منتج
+        </h3>
 
         <p>
             الفترة:
@@ -156,53 +313,89 @@
             إلى
             {{ end_date.strftime('%Y-%m-%d') }}
         </p>
+
     </div>
 
+    <!-- =========================
+         SUBJECT
+    ========================== -->
+
     <div class="subject">
+
         <h4>
             سجل الموضوع:
             مستخلص منتج "{{ bag_names }}"
         </h4>
+
     </div>
+
+    <!-- =========================
+         PRODUCTS
+    ========================== -->
 
     {% for bag_name, rows in grouped_by_bag.items() %}
 
     <div class="bag-section">
 
         <div class="bag-title">
-            منتج: {{ bag_name }}
+
+            منتج:
+            {{ bag_name }}
+
         </div>
 
         <table>
 
             <thead>
+
                 <tr>
-                    <th>#</th>
-                    <th>التاريخ</th>
-                    <th>الكمية</th>
-                    <th>الإجمالي</th>
-                    <th>مرجع المتعهدة</th>
-                    <th>مرجع التخطيط</th>
+
+                    <th style="width: 7%;">#</th>
+
+                    <th style="width: 18%;">
+                        التاريخ
+                    </th>
+
+                    <th style="width: 18%;">
+                        الكمية
+                    </th>
+
+                    <th style="width: 22%;">
+                        الإجمالي
+                    </th>
+
+                    <th style="width: 17%;">
+                        مرجع المتعهدة
+                    </th>
+
+                    <th style="width: 18%;">
+                        مرجع التخطيط
+                    </th>
+
                 </tr>
+
             </thead>
 
             <tbody>
 
                 {% for row in rows %}
+
                 <tr>
 
-                    <td>{{ loop.index }}</td>
+                    <td>
+                        {{ loop.index }}
+                    </td>
 
                     <td>
                         {{ row.date.strftime('%Y-%m-%d') if row.date else '' }}
                     </td>
 
                     <td>
-                        {{ row.quantity|round|int }}
+                        {{ "{:,.0f}".format(row.quantity or 0) }}
                     </td>
 
                     <td>
-                        {{ "%.2f"|format(row.amount or 0) }}
+                        {{ "{:,.2f}".format(row.amount or 0) }}
                     </td>
 
                     <td>
@@ -214,28 +407,45 @@
                     </td>
 
                 </tr>
+
                 {% endfor %}
 
             </tbody>
 
             <tfoot>
+
                 <tr class="total-row">
 
                     <td colspan="2">
+
                         إجمالي {{ bag_name }}
+
                     </td>
 
                     <td>
-                        {{ rows|sum(attribute='quantity')|round|int }}
+
+                        {{
+                            "{:,.0f}".format(
+                                rows|sum(attribute='quantity') or 0
+                            )
+                        }}
+
                     </td>
 
                     <td>
-                        {{ "%.2f"|format(rows|sum(attribute='amount')) }}
+
+                        {{
+                            "{:,.2f}".format(
+                                rows|sum(attribute='amount') or 0
+                            )
+                        }}
+
                     </td>
 
                     <td colspan="2"></td>
 
                 </tr>
+
             </tfoot>
 
         </table>
@@ -244,23 +454,26 @@
 
     {% endfor %}
 
+    <!-- =========================
+         SUMMARY
+    ========================== -->
+
     <div class="summary">
 
         <p>
             <strong>ملخص التقرير</strong>
-        </p>
-
-        <p>
-            إجمالي الكمية:
-            {{ grand_total_quantity|round|int }} كيس
-        </p>
 
         <p>
             إجمالي المبلغ:
-            {{ "%.2f"|format(grand_total_amount or 0) }} ريال
+            {{ "{:,.2f}".format(grand_total_amount or 0) }}
+            ريال
         </p>
 
     </div>
+
+    <!-- =========================
+         LETTER
+    ========================== -->
 
     <div class="letter-body">
 
@@ -274,11 +487,16 @@
             السلام عليكم ورحمة الله وبركاته،،،
         </p>
 
-        <p>
             إشارة إلى الموضوع أعلاه،
+
             يرجى التكرم بصرف أجور خياطة أكياس
-            <strong>{{ bag_names }}</strong>
+
+            <strong>
+                {{ bag_names }}
+            </strong>
+
             للكميات الموضحة أعلاه والخاصة بالمقاول / عراقية زيلعي.
+
         </p>
 
         <p>
@@ -286,6 +504,10 @@
         </p>
 
     </div>
+
+    <!-- =========================
+         SIGNATURES
+    ========================== -->
 
     <div class="signatures">
 
@@ -300,9 +522,8 @@
                     <p>
                         <strong>المختص</strong>
                     </p>
-
-                    <p>
-                        التوقيع: __________________
+                        التوقيع:
+                        __________________
                     </p>
 
                     <p>
@@ -321,13 +542,13 @@
                             إدارة الإنتاج والصيانة
                         </strong>
                     </p>
-
-                    <p>
-                        التوقيع: __________________
+                        التوقيع:
+                        __________________
                     </p>
 
                     <p>
-                        التاريخ: __________________
+                        التاريخ:
+                        __________________
                     </p>
 
                 </td>
@@ -338,18 +559,27 @@
 
     </div>
 
+    <!-- =========================
+         FOOTER
+    ========================== -->
+
     <div class="footer">
 
         <p>
             هذا المستخلص صادر من نظام معمل الخياطات
+            - نسخة رسمية
         </p>
 
         <p>
+
             تاريخ الطباعة:
+
             {{ current_datetime.strftime('%Y-%m-%d %H:%M:%S') }}
+
         </p>
 
     </div>
 
 </body>
+
 </html>

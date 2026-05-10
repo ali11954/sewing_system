@@ -11,6 +11,32 @@ from accounting import AccountingSystem
 
 def register_routes(app):
     # ==================== مصادقة المستخدم ====================
+    import gc
+    import tracemalloc
+
+    def optimize_memory():
+        """تحسين استخدام الذاكرة"""
+        gc.collect()  # جمع القمامة
+        if tracemalloc.is_tracing():
+            tracemalloc.stop()
+        tracemalloc.start(25)  # تتبع 25 إطار فقط
+
+    # أضف هذه الدالة في routes.py
+    def get_arabic_day_name(day_name):
+        """تحويل اسم اليوم إلى العربية"""
+        days = {
+            'Saturday': 'السبت',
+            'Sunday': 'الأحد',
+            'Monday': 'الاثنين',
+            'Tuesday': 'الثلاثاء',
+            'Wednesday': 'الأربعاء',
+            'Thursday': 'الخميس',
+            'Friday': 'الجمعة'
+        }
+        return days.get(day_name, day_name)
+
+    # سجل الفلتر في Jinja2
+    app.jinja_env.globals.update(get_arabic_day_name=get_arabic_day_name)
 
     @app.route('/login', methods=['GET', 'POST'])
     def login():
@@ -303,27 +329,97 @@ def register_routes(app):
         # جلب أسماء العاملات للقائمة المنسدلة
         machines = Machine.query.filter_by(is_active=True).all()
 
-        # أسماء الخياطات الرئيسيات
-        operators = [m.operator_name for m in machines if m.operator_name]
+        # أسماء الخياطات الرئيسيات (مع تفاصيل المكينة)
+        operators = []
+        for m in machines:
+            if m.operator_name:
+                operators.append({
+                    'name': m.operator_name,
+                    'machine_code': m.code,
+                    'machine_name': m.name,
+                    'type': 'operator'
+                })
 
-        # أسماء المساعدات الرسميات
-        assistants = [m.assistant_name for m in machines if m.assistant_name]
+        # أسماء المساعدات الرسميات (مع تفاصيل المكينة)
+        assistants = []
+        for m in machines:
+            if m.assistant_name:
+                assistants.append({
+                    'name': m.assistant_name,
+                    'machine_code': m.code,
+                    'machine_name': m.name,
+                    'type': 'assistant'
+                })
 
         # أسماء العاملات المؤقتات من الإنتاج
-        temp_workers = db.session.query(Production.worker_name).filter(
-            Production.is_temporary == True,
-            Production.worker_name.isnot(None)
+        # 1. الخياطات المؤقتات (من حقل worker_name)
+        temp_workers_from_production = db.session.query(Production.worker_name).filter(
+            Production.worker_name.isnot(None),
+            Production.worker_name != '',
+            Production.date >= datetime.now().date() - timedelta(days=365)  # آخر سنة
         ).distinct().all()
-        temp_workers = [w[0] for w in temp_workers if w[0]]
 
-        # دمج جميع الأسماء للقائمة المنسدلة
-        all_workers = list(set(operators + assistants + temp_workers))
+        # 2. المساعدات المؤقتات (من حقل temporary_assistant)
+        temp_assistants_from_production = db.session.query(Production.temporary_assistant).filter(
+            Production.temporary_assistant.isnot(None),
+            Production.temporary_assistant != '',
+            Production.date >= datetime.now().date() - timedelta(days=365)
+        ).distinct().all()
+
+        # دمج جميع العاملات المؤقتات في مجموعة واحدة لتجنب التكرار
+        temp_workers_set = set()
+
+        for w in temp_workers_from_production:
+            if w[0]:
+                temp_workers_set.add(w[0])
+
+        for ta in temp_assistants_from_production:
+            if ta[0]:
+                temp_workers_set.add(ta[0])
+
+        # تحويل إلى قائمة مرتبة
+        temp_workers = []
+        for name in sorted(temp_workers_set):
+            temp_workers.append({
+                'name': name,
+                'type': 'temporary'
+            })
+
+        # 3. أسماء العاملات الذين لديهم سلف سابقة (لإظهارهم حتى لو لم ينتجوا مؤخراً)
+        workers_with_advances = db.session.query(Advance.worker_name).filter(
+            Advance.worker_name.isnot(None),
+            Advance.worker_name != ''
+        ).distinct().all()
+
+        advance_workers = set()
+        for aw in workers_with_advances:
+            if aw[0]:
+                advance_workers.add(aw[0])
+
+        # إضافة العاملات الذين لديهم سلف ولكن ليسوا في القوائم الأخرى
+        for name in advance_workers:
+            if name not in temp_workers_set and name not in [o['name'] for o in operators] and name not in [a['name']
+                                                                                                            for a in
+                                                                                                            assistants]:
+                temp_workers.append({
+                    'name': name,
+                    'type': 'other'
+                })
+
+        # دمج جميع العاملات للقائمة المنسدلة (مع الترتيب)
+        all_workers = {
+            'operators': operators,
+            'assistants': assistants,
+            'temp_workers': temp_workers
+        }
 
         return render_template('advances.html',
                                advances=advances,
                                machines=machines,
-                               temp_workers=temp_workers,
+                               all_workers=all_workers,
+                               operators=operators,
                                assistants=assistants,
+                               temp_workers=temp_workers,
                                datetime=datetime)
 
     @app.route('/advances/add', methods=['POST'])
@@ -1570,13 +1666,16 @@ def register_routes(app):
     from datetime import datetime
     from weasyprint import HTML
     import io
-
     @app.route('/settlements_report_pdf')
     @login_required
     def settlements_report_pdf():
         """تصدير تقرير المستخلصات PDF"""
 
         try:
+            from weasyprint import HTML
+            from sqlalchemy.orm import joinedload
+            from flask import make_response
+
             # =========================
             # قراءة التواريخ
             # =========================
@@ -1593,22 +1692,24 @@ def register_routes(app):
             # =========================
             # قراءة الأصناف
             # =========================
-            selected_bag_ids = []
-
             bag_ids_str = request.args.get('bag_ids', '').strip()
 
-            if bag_ids_str:
-                selected_bag_ids = [
-                    int(x)
-                    for x in bag_ids_str.split(',')
-                    if x.strip().isdigit()
-                ]
+            selected_bag_ids = [
+                int(x)
+                for x in bag_ids_str.split(',')
+                if x.strip().isdigit()
+            ] if bag_ids_str else []
 
             # =========================
-            # الاستعلام
+            # الاستعلام مع joinedload لتحسين الأداء
             # =========================
-            query = Production.query.filter(
-                Production.date.between(start_date, end_date)
+            query = (
+                Production.query
+                .options(joinedload(Production.bag_type))
+                .options(joinedload(Production.machine))
+                .filter(
+                    Production.date.between(start_date, end_date)
+                )
             )
 
             if selected_bag_ids:
@@ -1616,16 +1717,22 @@ def register_routes(app):
                     Production.bag_type_id.in_(selected_bag_ids)
                 )
 
-            productions = query.order_by(Production.date.asc()).all()
+            productions = query.order_by(
+                Production.date.asc()
+            ).all()
+
+            if not productions:
+                flash('لا توجد بيانات للفترة المحددة', 'warning')
+                return redirect(url_for('settlements_report_page'))
 
             # =========================
-            # تجميع البيانات
+            # تجميع البيانات (استخدام tuple كمفتاح)
             # =========================
             grouped_data = {}
 
             for p in productions:
 
-                key = f"{p.date}_{p.bag_type_id}"
+                key = (p.date, p.bag_type_id)
 
                 if key not in grouped_data:
                     grouped_data[key] = {
@@ -1634,8 +1741,8 @@ def register_routes(app):
                             p.bag_type.full_name
                             if p.bag_type else '-'
                         ),
-                        'quantity': 0,
-                        'amount': 0,
+                        'quantity': 0.0,
+                        'amount': 0.0,
                         'contractor_reference': '-',
                         'planning_reference': '-'
                     }
@@ -1647,13 +1754,17 @@ def register_routes(app):
                         p.contractor_reference and
                         grouped_data[key]['contractor_reference'] == '-'
                 ):
-                    grouped_data[key]['contractor_reference'] = p.contractor_reference
+                    grouped_data[key]['contractor_reference'] = (
+                        p.contractor_reference
+                    )
 
                 if (
                         p.planning_reference and
                         grouped_data[key]['planning_reference'] == '-'
                 ):
-                    grouped_data[key]['planning_reference'] = p.planning_reference
+                    grouped_data[key]['planning_reference'] = (
+                        p.planning_reference
+                    )
 
             report_rows = list(grouped_data.values())
 
@@ -1662,7 +1773,7 @@ def register_routes(app):
             )
 
             # =========================
-            # تجميع حسب الصنف
+            # التجميع حسب الصنف
             # =========================
             grouped_by_bag = {}
 
@@ -1691,53 +1802,52 @@ def register_routes(app):
             current_datetime = datetime.now()
 
             # =========================
-            # توليد HTML
+            # إنشاء HTML
             # =========================
             html_content = render_template(
                 'settlements_report_pdf.html',
-
                 grouped_by_bag=grouped_by_bag,
                 bag_names=bag_names,
-
                 start_date=start_date,
                 end_date=end_date,
-
                 grand_total_quantity=grand_total_quantity,
                 grand_total_amount=grand_total_amount,
-
                 current_datetime=current_datetime
             )
 
             # =========================
-            # توليد PDF
+            # إنشاء PDF
             # =========================
-            pdf_file = HTML(
+            pdf = HTML(
                 string=html_content,
-                base_url=request.host_url
+                base_url=request.root_url
             ).write_pdf()
 
             # =========================
-            # تجهيز الاستجابة
+            # اسم الملف (إنجليزي لتجنب مشاكل الترميز)
             # =========================
-            response = make_response(pdf_file)
-
-            response.headers['Content-Type'] = 'application/pdf'
-
-            # اسم إنجليزي لتجنب مشاكل المتصفحات
             filename = (
                 f"settlements_report_"
                 f"{start_date}_{end_date}.pdf"
             )
 
-            response.headers[
-                'Content-Disposition'
-            ] = f'inline; filename="{filename}"'
+            # =========================
+            # Response باستخدام make_response
+            # =========================
+            response = make_response(pdf)
+
+            response.headers['Content-Type'] = 'application/pdf'
+            response.headers['Content-Disposition'] = (
+                f'attachment; filename="{filename}"'
+            )
+
+            response.headers['Content-Length'] = len(pdf)
 
             return response
 
         except Exception as e:
 
-            current_app.logger.error(
+            current_app.logger.exception(
                 f"PDF ERROR: {str(e)}"
             )
 
@@ -1770,15 +1880,18 @@ def register_routes(app):
             }
         }
 
-    # ==================== توزيع الأجور ====================
     @app.route('/distribute_salaries')
     @login_required
     def distribute_salaries():
-        """صفحة توزيع الأجور"""
+        """صفحة توزيع الأجور مع Pagination"""
+        from math import ceil
+
         today = datetime.now().date()
         start_date = request.args.get('start_date')
         end_date = request.args.get('end_date')
         settlement_id = request.args.get('settlement_id')
+        page = request.args.get('page', 1, type=int)  # رقم الصفحة
+        per_page = 10  # عدد العاملات في الصفحة الواحدة (قللنا إلى 10)
 
         if start_date:
             start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
@@ -1790,24 +1903,18 @@ def register_routes(app):
         else:
             end_date = today
 
-        # جلب المستخلصات التي لم يتم توزيعها بعد (غير مرتبطة بمدفوعات العاملات)
-        # نفحص المستخلصات التي حالتها posted أو paid_to_contractor ولم يتم صرف رواتب العاملات لها
-        from models import WorkerPayment
-
-        # جلب جميع المستخلصات المرحلة أو المدفوعة للمتعهدة
+        # جلب المستخلصات
         all_settlements = Settlement.query.filter(
             Settlement.status.in_(['posted', 'paid_to_contractor'])
         ).order_by(Settlement.created_date.desc()).all()
 
-        # تصفية المستخلصات التي لم يتم توزيع رواتب العاملات لها
+        # تصفية المستخلصات غير الموزعة
+        from models import WorkerPayment
         settlements = []
         for s in all_settlements:
-            # التحقق إذا كان هناك مدفوعات للعاملات مرتبطة بهذا المستخلص
-            # نفحص إذا كانت هناك مدفوعات في نفس فترة المستخلص
             payments_exist = WorkerPayment.query.filter(
                 WorkerPayment.payment_date.between(s.start_date, s.end_date)
             ).first()
-
             if not payments_exist:
                 settlements.append(s)
 
@@ -1818,20 +1925,801 @@ def register_routes(app):
             end_date = settlement.end_date
 
         # حساب بيانات الخياطات والمساعدات
-        workers_data = calculate_workers_and_assistants_for_distribution(start_date, end_date)
-        total_net_amount = sum(w['net_amount'] for w in workers_data)
+        all_workers_data = calculate_workers_and_assistants_for_distribution(start_date, end_date)
+
+        # تطبيق Pagination
+        total_workers = len(all_workers_data)
+        total_pages = ceil(total_workers / per_page)
+
+        # تقطيع البيانات
+        start_idx = (page - 1) * per_page
+        end_idx = start_idx + per_page
+        workers_data = all_workers_data[start_idx:end_idx]
+
+        total_net_amount = sum(w['net_amount'] for w in all_workers_data)
 
         # جلب آخر المدفوعات (آخر 20)
-        recent_payments = WorkerPayment.query.order_by(WorkerPayment.payment_date.desc()).limit(20).all()
+        recent_payments = WorkerPayment.query.order_by(
+            WorkerPayment.payment_date.desc()
+        ).limit(20).all()
 
         return render_template('distribute_salaries.html',
                                workers_data=workers_data,
+                               all_workers_data=all_workers_data,  # للاحتفاظ بالبيانات الكاملة
                                total_net_amount=total_net_amount,
                                start_date=start_date,
                                end_date=end_date,
                                settlements=settlements,
                                settlement=settlement,
-                               recent_payments=recent_payments)
+                               recent_payments=recent_payments,
+                               current_page=page,
+                               total_pages=total_pages,
+                               total_workers=total_workers,
+                               per_page=per_page)
+
+    @app.route('/distribute_salaries_pdf')
+    @login_required
+    def distribute_salaries_pdf():
+        """تصدير جدول توزيع الرواتب إلى PDF"""
+        from math import ceil
+        from weasyprint import HTML
+        from flask import make_response
+
+        try:
+            today = datetime.now().date()
+            start_date = request.args.get('start_date')
+            end_date = request.args.get('end_date')
+            settlement_id = request.args.get('settlement_id')
+
+            if start_date:
+                start_date = datetime.strptime(start_date, '%Y-%m-%d').date()
+            else:
+                start_date = today.replace(day=1)
+
+            if end_date:
+                end_date = datetime.strptime(end_date, '%Y-%m-%d').date()
+            else:
+                end_date = today
+
+            # جلب المستخلص
+            settlement = None
+            if settlement_id:
+                settlement = Settlement.query.get(int(settlement_id))
+                if settlement:
+                    start_date = settlement.start_date
+                    end_date = settlement.end_date
+
+            # حساب بيانات الخياطات والمساعدات
+            all_workers_data = calculate_workers_and_assistants_for_distribution(start_date, end_date)
+
+            # حساب الإجماليات
+            total_net_amount = sum(w['net_amount'] for w in all_workers_data)
+            total_amount = sum(w['total_amount'] for w in all_workers_data)
+            total_advances = sum(w['total_advances'] for w in all_workers_data)
+            total_deductions = sum(w['deductions'] for w in all_workers_data)
+
+            # إحصائيات إضافية
+            total_operators = len([w for w in all_workers_data if 'خياطة' in w['type']])
+            total_assistants = len([w for w in all_workers_data if 'مساعدة' in w['type']])
+
+            # إعدادات النظام
+            settings = SystemSettings.query.first()
+
+            # إنشاء HTML
+            html_content = render_template(
+                'distribute_salaries_pdf.html',
+                workers_data=all_workers_data,
+                start_date=start_date,
+                end_date=end_date,
+                settlement=settlement,
+                total_net_amount=total_net_amount,
+                total_amount=total_amount,
+                total_advances=total_advances,
+                total_deductions=total_deductions,
+                total_operators=total_operators,
+                total_assistants=total_assistants,
+                settings=settings,
+                current_datetime=datetime.now()
+            )
+
+            # إنشاء PDF
+            pdf = HTML(string=html_content, base_url=request.root_url).write_pdf()
+
+            # اسم الملف
+            filename = f"distribute_salaries_{start_date}_{end_date}.pdf"
+
+            response = make_response(pdf)
+            response.headers['Content-Type'] = 'application/pdf'
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            return response
+
+        except Exception as e:
+            current_app.logger.exception(f"PDF ERROR: {str(e)}")
+            flash(f'حدث خطأ أثناء إنشاء ملف PDF: {str(e)}', 'danger')
+            return redirect(url_for('distribute_salaries'))
+
+    @app.route('/api/distribute-all-workers', methods=['POST'])
+    @login_required
+    def api_distribute_all_workers():
+        """توزيع أجور جميع العاملات في الفترة"""
+        from models import WorkerPayment
+
+        data = request.get_json()
+        start_date_str = data.get('start_date')
+        end_date_str = data.get('end_date')
+
+        if not start_date_str or not end_date_str:
+            return jsonify({'success': False, 'message': 'يرجى تحديد الفترة'})
+
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        # حساب جميع العاملات
+        workers_data = calculate_workers_and_assistants_for_distribution(start_date, end_date)
+
+        # تصفية العاملات التي لها مبالغ مستحقة
+        workers_to_pay = [w for w in workers_data if w['net_amount'] > 0]
+
+        count = 0
+        total = 0
+
+        for worker in workers_to_pay:
+            # التحقق من عدم وجود دفعة سابقة
+            existing = WorkerPayment.query.filter(
+                WorkerPayment.worker_name == worker['name'],
+                WorkerPayment.payment_date >= start_date,
+                WorkerPayment.payment_date <= end_date
+            ).first()
+
+            if not existing:
+                worker_payment = WorkerPayment(
+                    worker_name=worker['name'],
+                    amount=worker['net_amount'],
+                    payment_date=datetime.now().date(),
+                    payment_method='cash',
+                    receipt_number=f'AUTO-{datetime.now().strftime("%Y%m%d")}-{count + 1}',
+                    created_by=current_user.username
+                )
+                db.session.add(worker_payment)
+                count += 1
+                total += worker['net_amount']
+
+                # إضافة سلفة سالبة
+                advance = Advance(
+                    worker_name=worker['name'],
+                    amount=-worker['net_amount'],
+                    date=datetime.now().date(),
+                    is_temporary=('مؤقتة' in worker['type']),
+                    notes=f'صرف آلي للفترة {start_date} إلى {end_date}',
+                    created_by=current_user.username
+                )
+                db.session.add(advance)
+
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'count': count,
+            'total': total,
+            'message': f'تم توزيع أجور {count} عاملة بمبلغ {total:.2f} ريال'
+        })
+
+    @app.route('/worker_production_details/<worker_name>/<machine_code>')
+    @login_required
+    def worker_production_details(worker_name, machine_code):
+        """صفحة تفاصيل الإنتاج اليومي لخياطة مع مساعدتها"""
+
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+
+        if not start_date_str or not end_date_str:
+            flash('يرجى تحديد الفترة الزمنية', 'warning')
+            return redirect(url_for('distribute_salaries'))
+
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        # جلب المكينة
+        machine = Machine.query.filter_by(code=machine_code).first()
+        if not machine:
+            flash('لم يتم العثور على المكينة', 'danger')
+            return redirect(url_for('distribute_salaries'))
+
+        # جلب الإنتاج اليومي للمكينة
+        productions = Production.query.filter(
+            Production.date.between(start_date, end_date),
+            Production.machine_id == machine.id
+        ).order_by(Production.date).all()
+
+        if not productions:
+            flash('لا توجد بيانات إنتاج للفترة المحددة', 'warning')
+            return redirect(url_for('distribute_salaries'))
+
+        # تجميع البيانات حسب اليوم
+        daily_productions = {}
+        for p in productions:
+            date_str = p.date.strftime('%Y-%m-%d')
+            if date_str not in daily_productions:
+                daily_productions[date_str] = {
+                    'date': p.date,
+                    'day_name': p.date.strftime('%A'),
+                    'quantity': 0,
+                    'amount': 0,
+                    'products': []
+                }
+            daily_productions[date_str]['quantity'] += p.quantity
+            daily_productions[date_str]['amount'] += p.total_amount
+            daily_productions[date_str]['products'].append({
+                'bag_type': p.bag_type.full_name if p.bag_type else '-',
+                'quantity': p.quantity,
+                'amount': p.total_amount,
+                'temp_assistant': p.temporary_assistant,
+                'contractor_reference': p.contractor_reference,
+                'planning_reference': p.planning_reference
+            })
+
+        # تحويل إلى قائمة مرتبة
+        daily_list = list(daily_productions.values())
+        daily_list.sort(key=lambda x: x['date'])
+
+        # حساب الإجماليات
+        total_quantity = sum(p.quantity for p in productions)
+        total_amount = sum(p.total_amount for p in productions)
+
+        # حساب الخصومات
+        settings = SystemSettings.query.first()
+        commission = settings.contractor_amount * total_quantity if settings else 0
+        insurance = total_amount * (
+                    settings.insurance_amount / 100) if settings and settings.insurance_type == 'percentage' else (
+            settings.insurance_amount if settings else 0)
+        tax = total_amount * (settings.tax_amount / 100) if settings and settings.tax_type == 'percentage' else (
+            settings.tax_amount if settings else 0)
+
+        net_payable = total_amount - commission - insurance - tax
+        operator_share = net_payable / 2
+        assistant_share = net_payable / 2
+
+        # جلب السلف
+        operator_advances = Advance.query.filter(
+            Advance.worker_name == machine.operator_name,
+            Advance.date.between(start_date, end_date),
+            Advance.amount > 0
+        ).all()
+
+        assistant_advances = []
+        if machine.assistant_name:
+            assistant_advances = Advance.query.filter(
+                Advance.worker_name == machine.assistant_name,
+                Advance.date.between(start_date, end_date),
+                Advance.amount > 0
+            ).all()
+
+        # سلف المساعدة المؤقتة
+        temp_assistant_advances = []
+        temp_assistant_name = None
+        for p in productions:
+            if p.temporary_assistant:
+                temp_assistant_name = p.temporary_assistant
+                temp_assistant_advances = Advance.query.filter(
+                    Advance.worker_name == temp_assistant_name,
+                    Advance.date.between(start_date, end_date),
+                    Advance.amount > 0
+                ).all()
+                break
+
+        # تحديد نوع العاملة المعروضة
+        worker_type = 'operator'
+        if worker_name != machine.operator_name:
+            if worker_name == machine.assistant_name:
+                worker_type = 'assistant'
+            else:
+                worker_type = 'temp_assistant'
+
+        # حساب البيانات حسب النوع
+        if worker_type == 'operator':
+            worker_share_value = operator_share
+            total_advances = sum(a.amount for a in operator_advances)
+            worker_title = f"خياطة رئيسية: {machine.operator_name}"
+        elif worker_type == 'assistant':
+            worker_share_value = assistant_share
+            total_advances = sum(a.amount for a in assistant_advances)
+            worker_title = f"مساعدة رسمية: {machine.assistant_name}"
+        else:
+            worker_share_value = assistant_share
+            total_advances = sum(a.amount for a in temp_assistant_advances)
+            worker_title = f"مساعدة مؤقتة: {temp_assistant_name}"
+
+        net_amount = worker_share_value - total_advances
+
+        return render_template('worker_production_details.html',
+                               worker_name=worker_name,
+                               worker_title=worker_title,
+                               machine=machine,
+                               start_date=start_date,
+                               end_date=end_date,
+                               daily_productions=daily_list,
+                               total_quantity=total_quantity,
+                               total_amount=total_amount,
+                               commission=commission,
+                               insurance=insurance,
+                               tax=tax,
+                               net_payable=net_payable,
+                               operator_share=operator_share,
+                               assistant_share=assistant_share,
+                               worker_share=worker_share_value,
+                               total_advances=total_advances,
+                               net_amount=net_amount if net_amount > 0 else 0,
+                               operator_advances=operator_advances,
+                               assistant_advances=assistant_advances,
+                               temp_assistant_advances=temp_assistant_advances,
+                               temp_assistant_name=temp_assistant_name,
+                               settings=settings,
+                               current_datetime=datetime.now())
+
+    @app.route('/all_workers_details')
+    @login_required
+    def all_workers_details():
+        """صفحة تفاصيل جميع العاملات - النظام المحاسبي النهائي (بدون خصم مزدوج)"""
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+
+        if not start_date_str or not end_date_str:
+            flash('يرجى تحديد الفترة الزمنية', 'warning')
+            return redirect(url_for('distribute_salaries'))
+
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        machines = Machine.query.filter_by(is_active=True).order_by(Machine.code).all()
+
+        machines_data = {}
+        grand_total_net = 0
+        grand_total_workers = 0
+
+        for machine in machines:
+            productions = Production.query.filter(
+                Production.date.between(start_date, end_date),
+                Production.machine_id == machine.id
+            ).order_by(Production.date).all()
+
+            if not productions:
+                continue
+
+            # ========== إجماليات المكينة ==========
+            total_quantity = sum(p.quantity for p in productions)
+            total_amount = sum(p.total_amount for p in productions)
+
+            # الخصومات (تُخصم مرة واحدة فقط هنا)
+            settings = SystemSettings.query.first()
+            commission = settings.contractor_amount * total_quantity if settings else 0
+            insurance = total_amount * (
+                        settings.insurance_amount / 100) if settings and settings.insurance_type == 'percentage' else (
+                settings.insurance_amount if settings else 0)
+            tax = total_amount * (settings.tax_amount / 100) if settings and settings.tax_type == 'percentage' else (
+                settings.tax_amount if settings else 0)
+
+            total_deductions = commission + insurance + tax
+            net_payable = total_amount - total_deductions  # صافي المكينة بعد الخصم (يخصم مرة واحدة)
+
+            # ========== تجميع الإنتاج اليومي ==========
+            daily_productions = {}
+            operators_work = {}  # الخياطات
+            assistants_work = {}  # المساعدات
+
+            for p in productions:
+                date_str = p.date.strftime('%Y-%m-%d')
+
+                if date_str not in daily_productions:
+                    daily_productions[date_str] = {
+                        'date': p.date,
+                        'day_name': get_arabic_day_name(p.date.strftime('%A')),
+                        'products': []
+                    }
+                daily_productions[date_str]['products'].append({
+                    'bag_type': f"{p.bag_type.full_name} - {p.bag_type.size}" if p.bag_type else '-',
+                    'quantity': p.quantity,
+                    'amount': p.total_amount,
+                    'temp_assistant': p.temporary_assistant or '-',
+                    'contractor_reference': p.contractor_reference or '-',
+                    'planning_reference': p.planning_reference or '-'
+                })
+
+                # الخياطة الرئيسية
+                if machine.operator_name:
+                    if machine.operator_name not in operators_work:
+                        operators_work[machine.operator_name] = {'quantity': 0, 'amount': 0}
+                    operators_work[machine.operator_name]['quantity'] += p.quantity
+                    operators_work[machine.operator_name]['amount'] += p.total_amount
+
+                # المساعدة
+                if p.temporary_assistant:
+                    temp_name = p.temporary_assistant.strip()
+                    if temp_name not in assistants_work:
+                        assistants_work[temp_name] = {'quantity': 0, 'amount': 0}
+                    assistants_work[temp_name]['quantity'] += p.quantity
+                    assistants_work[temp_name]['amount'] += p.total_amount
+                elif machine.assistant_name:
+                    if machine.assistant_name not in assistants_work:
+                        assistants_work[machine.assistant_name] = {'quantity': 0, 'amount': 0}
+                    assistants_work[machine.assistant_name]['quantity'] += p.quantity
+                    assistants_work[machine.assistant_name]['amount'] += p.total_amount
+
+            daily_list = list(daily_productions.values())
+            daily_list.sort(key=lambda x: x['date'])
+
+            # ========== توزيع صافي المكينة (بدون خصم إضافي) ==========
+            total_operator_amount = sum(o['amount'] for o in operators_work.values()) or 1
+            total_assistant_amount = sum(a['amount'] for a in assistants_work.values()) or 1
+
+            all_workers = []
+
+            # الخياطات - يأخذن 50% من صافي المكينة
+            for name, work in operators_work.items():
+                ratio = work['amount'] / total_operator_amount
+                share = (net_payable * 0.5) * ratio  # نصيبها من صافي المكينة (بدون خصم إضافي)
+
+                # السلف فقط تُخصم (الخصومات خصمت مرة واحدة من net_payable)
+                advances = Advance.query.filter(
+                    Advance.worker_name == name,
+                    Advance.date.between(start_date, end_date),
+                    Advance.amount > 0
+                ).all()
+                total_advances = sum(a.amount for a in advances)
+
+                net = share - total_advances  # الخصومات لا تُخصم مرة أخرى
+
+                all_workers.append({
+                    'name': name,
+                    'type': 'خياطة رئيسية' if name == machine.operator_name else 'خياطة مؤقتة',
+                    'category': 'خياطة',
+                    'work_quantity': work['quantity'],
+                    'work_amount': work['amount'],
+                    'work_percentage': ratio * 100,
+                    'share': share,
+                    'advances': total_advances,
+                    'net': max(net, 0)
+                })
+
+            # المساعدات - يأخذن 50% من صافي المكينة
+            for name, work in assistants_work.items():
+                ratio = work['amount'] / total_assistant_amount
+                share = (net_payable * 0.5) * ratio  # نصيبها من صافي المكينة (بدون خصم إضافي)
+
+                # السلف فقط تُخصم
+                advances = Advance.query.filter(
+                    Advance.worker_name == name,
+                    Advance.date.between(start_date, end_date),
+                    Advance.amount > 0
+                ).all()
+                total_advances = sum(a.amount for a in advances)
+
+                net = share - total_advances
+
+                assistant_type = 'مساعدة رسمية' if name == machine.assistant_name else 'مساعدة مؤقتة'
+
+                all_workers.append({
+                    'name': name,
+                    'type': assistant_type,
+                    'category': 'مساعدة',
+                    'work_quantity': work['quantity'],
+                    'work_amount': work['amount'],
+                    'work_percentage': ratio * 100,
+                    'share': share,
+                    'advances': total_advances,
+                    'net': max(net, 0)
+                })
+
+            # ترتيب العمال
+            all_workers.sort(key=lambda x: (x['category'] != 'خياطة', -x['share']))
+
+            # ========== إجماليات المكينة ==========
+            machines_data[machine.code] = {
+                'machine_code': machine.code,
+                'machine_name': machine.name,
+                'total_quantity': total_quantity,
+                'total_amount': total_amount,
+                'total_deductions': total_deductions,
+                'net_payable': net_payable,
+                'commission': commission,
+                'insurance': insurance,
+                'tax': tax,
+                'daily_productions': daily_list,
+                'workers': all_workers,
+                'total_share': sum(w['share'] for w in all_workers),
+                'total_advances': sum(w['advances'] for w in all_workers),
+                'total_net': sum(w['net'] for w in all_workers)
+            }
+
+            for w in all_workers:
+                grand_total_workers += 1
+                grand_total_net += w['net']
+
+        return render_template('all_workers_details.html',
+                               machines_data=machines_data,
+                               start_date=start_date,
+                               end_date=end_date,
+                               total_net_amount=grand_total_net,
+                               total_workers=grand_total_workers,
+                               current_datetime=datetime.now())
+
+    @app.route('/all_workers_details_pdf')
+    @login_required
+    def all_workers_details_pdf():
+        """تصدير تفاصيل جميع العاملات إلى PDF (بدون خصم مزدوج)"""
+        from weasyprint import HTML
+        from flask import make_response
+
+        try:
+            start_date_str = request.args.get('start_date')
+            end_date_str = request.args.get('end_date')
+
+            if not start_date_str or not end_date_str:
+                flash('يرجى تحديد الفترة الزمنية', 'warning')
+                return redirect(url_for('distribute_salaries'))
+
+            start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+            end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+            machines = Machine.query.filter_by(is_active=True).order_by(Machine.code).all()
+
+            machines_data = {}
+            total_net_amount = 0
+            total_workers = 0
+
+            for machine in machines:
+                productions = Production.query.filter(
+                    Production.date.between(start_date, end_date),
+                    Production.machine_id == machine.id
+                ).order_by(Production.date).all()
+
+                if not productions:
+                    continue
+
+                total_quantity = sum(p.quantity for p in productions)
+                total_amount = sum(p.total_amount for p in productions)
+
+                settings = SystemSettings.query.first()
+                commission = settings.contractor_amount * total_quantity if settings else 0
+                insurance = total_amount * (
+                            settings.insurance_amount / 100) if settings and settings.insurance_type == 'percentage' else (
+                    settings.insurance_amount if settings else 0)
+                tax = total_amount * (
+                            settings.tax_amount / 100) if settings and settings.tax_type == 'percentage' else (
+                    settings.tax_amount if settings else 0)
+
+                net_payable = total_amount - commission - insurance - tax
+
+                # تجميع الإنتاج اليومي
+                daily_productions = {}
+                for p in productions:
+                    date_str = p.date.strftime('%Y-%m-%d')
+                    if date_str not in daily_productions:
+                        daily_productions[date_str] = {
+                            'date': p.date,
+                            'day_name': get_arabic_day_name(p.date.strftime('%A')),
+                            'products': []
+                        }
+                    daily_productions[date_str]['products'].append({
+                        'bag_type': p.bag_type.full_name if p.bag_type else '-',
+                        'quantity': p.quantity,
+                        'amount': p.total_amount,
+                        'temp_assistant': p.temporary_assistant or '-',
+                        'contractor_reference': p.contractor_reference or '-',
+                        'planning_reference': p.planning_reference or '-'
+                    })
+
+                daily_list = list(daily_productions.values())
+                daily_list.sort(key=lambda x: x['date'])
+
+                # جمع العمل
+                operators_work = {}
+                assistants_work = {}
+
+                for p in productions:
+                    if machine.operator_name:
+                        if machine.operator_name not in operators_work:
+                            operators_work[machine.operator_name] = 0
+                        operators_work[machine.operator_name] += p.total_amount
+
+                    if p.temporary_assistant:
+                        temp_name = p.temporary_assistant.strip()
+                        if temp_name not in assistants_work:
+                            assistants_work[temp_name] = 0
+                        assistants_work[temp_name] += p.total_amount
+                    elif machine.assistant_name:
+                        if machine.assistant_name not in assistants_work:
+                            assistants_work[machine.assistant_name] = 0
+                        assistants_work[machine.assistant_name] += p.total_amount
+
+                total_operator_amount = sum(operators_work.values()) or 1
+                total_assistant_amount = sum(assistants_work.values()) or 1
+
+                # توزيع PDF
+                workers_list = []
+
+                for name, amount in operators_work.items():
+                    ratio = amount / total_operator_amount
+                    share = (net_payable * 0.5) * ratio
+                    workers_list.append({
+                        'name': name,
+                        'type': 'خياطة رئيسية' if name == machine.operator_name else 'خياطة مؤقتة',
+                        'share': share
+                    })
+
+                for name, amount in assistants_work.items():
+                    ratio = amount / total_assistant_amount
+                    share = (net_payable * 0.5) * ratio
+                    assistant_type = 'مساعدة رسمية' if name == machine.assistant_name else 'مساعدة مؤقتة'
+                    workers_list.append({
+                        'name': name,
+                        'type': assistant_type,
+                        'share': share
+                    })
+
+                machines_data[machine.code] = {
+                    'machine_code': machine.code,
+                    'machine_name': machine.name,
+                    'total_quantity': total_quantity,
+                    'total_amount': total_amount,
+                    'commission': commission,
+                    'insurance': insurance,
+                    'tax': tax,
+                    'net_payable': net_payable,
+                    'daily_productions': daily_list,
+                    'workers': workers_list
+                }
+
+                for w in workers_list:
+                    total_workers += 1
+                    total_net_amount += w['share']
+
+            html_content = render_template('all_workers_details_pdf.html',
+                                           machines_data=machines_data,
+                                           start_date=start_date,
+                                           end_date=end_date,
+                                           total_net_amount=total_net_amount,
+                                           total_workers=total_workers,
+                                           current_datetime=datetime.now())
+
+            pdf = HTML(string=html_content, base_url=request.root_url).write_pdf()
+
+            filename = f"all_workers_details_{start_date}_{end_date}.pdf"
+            response = make_response(pdf)
+            response.headers['Content-Type'] = 'application/pdf'
+            response.headers['Content-Disposition'] = f'attachment; filename="{filename}"'
+
+            return response
+
+        except Exception as e:
+            current_app.logger.exception(f"PDF ERROR: {str(e)}")
+            flash(f'حدث خطأ أثناء إنشاء ملف PDF: {str(e)}', 'danger')
+            return redirect(url_for('all_workers_details', start_date=start_date_str, end_date=end_date_str))
+
+
+    @app.route('/api/worker_daily_details')
+    @login_required
+    def api_worker_daily_details():
+        """API لجلب التفاصيل اليومية لخياطة أو مساعدة"""
+        worker_name = request.args.get('worker_name')
+        start_date_str = request.args.get('start_date')
+        end_date_str = request.args.get('end_date')
+        machine_code = request.args.get('machine_code')
+
+        if not worker_name or not start_date_str or not end_date_str:
+            return jsonify({'success': False, 'message': 'بيانات غير مكتملة'})
+
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+
+        # جلب المكينة إذا كان هناك كود
+        machine = None
+        if machine_code:
+            machine = Machine.query.filter_by(code=machine_code).first()
+
+        # جلب الإنتاج اليومي
+        daily_productions = []
+
+        if machine:
+            # جلب إنتاج المكينة اليومي
+            productions_by_date = {}
+
+            productions = Production.query.filter(
+                Production.date.between(start_date, end_date),
+                Production.machine_id == machine.id
+            ).order_by(Production.date).all()
+
+            for p in productions:
+                date_str = p.date.strftime('%Y-%m-%d')
+                if date_str not in productions_by_date:
+                    productions_by_date[date_str] = {
+                        'date': date_str,
+                        'day_name': p.date.strftime('%A'),
+                        'quantity': 0,
+                        'amount': 0,
+                        'bag_types': [],
+                        'temp_assistant': p.temporary_assistant
+                    }
+
+                productions_by_date[date_str]['quantity'] += p.quantity
+                productions_by_date[date_str]['amount'] += p.total_amount
+                productions_by_date[date_str]['bag_types'].append({
+                    'name': p.bag_type.full_name if p.bag_type else '-',
+                    'quantity': p.quantity,
+                    'amount': p.total_amount
+                })
+
+            daily_productions = list(productions_by_date.values())
+
+            # ترتيب حسب التاريخ
+            daily_productions.sort(key=lambda x: x['date'])
+
+            # حساب الإجماليات
+            total_quantity = sum(d['quantity'] for d in daily_productions)
+            total_amount = sum(d['amount'] for d in daily_productions)
+
+            # حساب دور الخياطة والمساعدة
+            settings = SystemSettings.query.first()
+            commission = settings.contractor_amount * total_quantity if settings else 0
+            insurance = total_amount * (
+                        settings.insurance_amount / 100) if settings and settings.insurance_type == 'percentage' else (
+                settings.insurance_amount if settings else 0)
+            tax = total_amount * (settings.tax_amount / 100) if settings and settings.tax_type == 'percentage' else (
+                settings.tax_amount if settings else 0)
+
+            net_payable = total_amount - commission - insurance - tax
+            operator_share = net_payable / 2
+            assistant_share = net_payable / 2
+
+            # جلب السلف
+            operator_advances = Advance.query.filter(
+                Advance.worker_name == machine.operator_name,
+                Advance.date.between(start_date, end_date),
+                Advance.amount > 0
+            ).all()
+            assistant_advances = Advance.query.filter(
+                Advance.worker_name == (machine.assistant_name),
+                Advance.date.between(start_date, end_date),
+                Advance.amount > 0
+            ).all() if machine.assistant_name else []
+
+            result = {
+                'success': True,
+                'worker_name': worker_name,
+                'machine_code': machine.code,
+                'machine_name': machine.name,
+                'operator_name': machine.operator_name,
+                'assistant_name': machine.assistant_name,
+                'daily_productions': daily_productions,
+                'total_quantity': total_quantity,
+                'total_amount': total_amount,
+                'commission': commission,
+                'insurance': insurance,
+                'tax': tax,
+                'net_payable': net_payable,
+                'operator_share': operator_share,
+                'assistant_share': assistant_share,
+                'operator_advances': [{'date': a.date.strftime('%Y-%m-%d'), 'amount': a.amount, 'notes': a.notes} for a
+                                      in operator_advances],
+                'assistant_advances': [{'date': a.date.strftime('%Y-%m-%d'), 'amount': a.amount, 'notes': a.notes} for a
+                                       in assistant_advances],
+                'operator_total_advances': sum(a.amount for a in operator_advances),
+                'assistant_total_advances': sum(a.amount for a in assistant_advances)
+            }
+
+            # تحديد نوع العاملة
+            if worker_name == machine.operator_name:
+                result['worker_type'] = 'operator'
+                result['worker_share'] = operator_share
+                result['total_advances'] = result['operator_total_advances']
+                result['net_amount'] = operator_share - result['operator_total_advances']
+            else:
+                result['worker_type'] = 'assistant'
+                result['worker_share'] = assistant_share
+                result['total_advances'] = result['assistant_total_advances']
+                result['net_amount'] = assistant_share - result['assistant_total_advances']
+
+        return jsonify(result)
 
     def calculate_workers_and_assistants_for_distribution(start_date, end_date):
         """حساب بيانات الخياطات والمساعدات للتوزيع"""

@@ -1,0 +1,21 @@
+services:
+- buildCommand: pip install -r requirements.txt
+  envVars:
+  - key: PYTHON_VERSION
+    value: 3.11.0
+  - key: WEB_CONCURRENCY
+    value: '1'
+  - key: TIMEOUT
+    value: '120'
+  - key: PYTHONUNBUFFERED
+    value: '1'
+  healthCheckPath: /health
+  name: sewing-system
+  plan: starter
+  runtime: python
+  scaling:
+    maxInstances: 1
+    minInstances: 1
+  startCommand: gunicorn app:app --timeout 120 --workers 1 --threads 2 --max-requests
+    100 --memory 512
+  type: web

@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>تقرير توزيع الرواتب</title>
+    <style>
+        @page {
+            size: A4 landscape;
+            margin: 1.5cm;
+        }
+
+        body {
+            font-family: "DejaVu Sans", "Arial", "Tahoma", sans-serif;
+            font-size: 10px;
+            line-height: 1.4;
+            margin: 0;
+            padding: 0;
+            direction: rtl;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+            color: #1a5490;
+        }
+
+        .header h2 {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #555;
+        }
+
+        .header p {
+            margin: 3px 0;
+            font-size: 11px;
+        }
+
+        .summary {
+            background: #f0f0f0;
+            padding: 8px 12px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            font-size: 11px;
+        }
+
+        .summary table {
+            width: 100%;
+            border: none;
+        }
+
+        .summary td {
+            border: none;
+            padding: 3px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 9px;
+        }
+
+        th, td {
+            border: 1px solid #aaa;
+            padding: 6px 4px;
+            text-align: center;
+            vertical-align: middle;
+        }
+
+        th {
+            background-color: #1a5490;
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+        }
+
+        .operator-row {
+            background-color: #f9f9f9;
+        }
+
+        .assistant-row {
+            background-color: #e8f4fd;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ccc;
+            font-size: 9px;
+            color: #666;
+        }
+
+        .signatures {
+            margin-top: 30px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .signature-box {
+            width: 45%;
+            text-align: center;
+        }
+
+        .signature-line {
+            border-top: 1px solid #000;
+            width: 80%;
+            margin: 30px auto 5px auto;
+        }
+
+        .text-center {
+            text-align: center;
+        }
+
+        .text-right {
+            text-align: right;
+        }
+
+        .text-left {
+            text-align: left;
+        }
+
+        .text-success {
+            color: #28a745;
+        }
+
+        .text-danger {
+            color: #dc3545;
+        }
+
+        .text-primary {
+            color: #007bff;
+        }
+
+        .fw-bold {
+            font-weight: bold;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 8px;
+        }
+
+        .badge-success {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .badge-info {
+            background-color: #17a2b8;
+            color: white;
+        }
+
+        .badge-warning {
+            background-color: #ffc107;
+            color: #333;
+        }
+
+        .page-break {
+            page-break-before: always;
+        }
+
+        @media print {
+            body {
+                margin: 0;
+                padding: 0;
+            }
+            .no-print {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>نظام معمل الخياطات</h1>
+    <h2>تقرير توزيع الرواتب</h2>
+    <p>
+        الفترة: {{ start_date.strftime('%Y-%m-%d') }} إلى {{ end_date.strftime('%Y-%m-%d') }}
+    </p>
+    {% if settlement %}
+    <p>
+        المستخلص: {{ settlement.start_date.strftime('%Y-%m-%d') }} - {{ settlement.end_date.strftime('%Y-%m-%d') }}
+        ({{ "%.2f"|format(settlement.net_amount) }} ريال)
+    </p>
+    {% endif %}
+    <p>
+        تاريخ الطباعة: {{ current_datetime.strftime('%Y-%m-%d %H:%M:%S') }}
+    </p>
+</div>
+
+<div class="summary">
+    <table>
+        <tr>
+            <td style="width: 25%;"><strong>إجمالي المبلغ:</strong></td>
+            <td style="width: 25%;">{{ "%.2f"|format(total_amount) }} ريال</td>
+            <td style="width: 25%;"><strong>إجمالي الخصومات:</strong></td>
+            <td style="width: 25%;">{{ "%.2f"|format(total_deductions) }} ريال</td>
+        </tr>
+        <tr>
+            <td><strong>إجمالي السلف:</strong></td>
+            <td>{{ "%.2f"|format(total_advances) }} ريال</td>
+            <td><strong>إجمالي الصافي:</strong></td>
+            <td class="text-success fw-bold">{{ "%.2f"|format(total_net_amount) }} ريال</td>
+        </tr>
+        <tr>
+            <td><strong>عدد الخياطات:</strong></td>
+            <td>{{ total_operators }}</td>
+            <td><strong>عدد المساعدات:</strong></td>
+            <td>{{ total_assistants }}</td>
+        </tr>
+        {% if settings %}
+        <tr>
+            <td><strong>عمولة المتعهدة (لكيس):</strong></td>
+            <td>{{ settings.contractor_amount }} ريال</td>
+            <td><strong>نسبة التأمينات:</strong></td>
+            <td>{{ settings.insurance_amount }}%</td>
+        </tr>
+        {% endif %}
+    </table>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>#</th>
+            <th>رقم المكينة</th>
+            <th>اسم المكينة</th>
+            <th>اسم العاملة</th>
+            <th>النوع</th>
+            <th>إجمالي الإنتاج</th>
+            <th>عمولة المتعهدة</th>
+            <th>التأمينات</th>
+            <th>الضرائب</th>
+            <th>الخصومات</th>
+            <th>السلف</th>
+            <th>الصافي</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for worker in workers_data %}
+        <tr class="{% if 'خياطة' in worker.type %}operator-row{% else %}assistant-row{% endif %}">
+            <td>{{ loop.index }}</td>
+            <td>{{ worker.machine_code }}</td>
+            <td>{{ worker.machine_name }}</td>
+            <td>{{ worker.name }}</td>
+            <td>
+                {% if 'خياطة رئيسية' in worker.type %}
+                <span class="badge badge-success">خياطة رئيسية</span>
+                {% elif 'مساعدة رسمية' in worker.type %}
+                <span class="badge badge-info">مساعدة رسمية</span>
+                {% else %}
+                <span class="badge badge-warning">مساعدة مؤقتة</span>
+                {% endif %}
+            </td>
+            <td>{{ "%.2f"|format(worker.total_amount) }}</td>
+            <td>{{ "%.2f"|format(worker.commission) }}</td>
+            <td>{{ "%.2f"|format(worker.insurance) }}</td>
+            <td>{{ "%.2f"|format(worker.tax) }}</td>
+            <td>{{ "%.2f"|format(worker.deductions) }}</td>
+            <td>{{ "%.2f"|format(worker.total_advances) }}</td>
+            <td class="text-success fw-bold">{{ "%.2f"|format(worker.net_amount) }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr style="background-color: #e9ecef; font-weight: bold;">
+            <td colspan="5" style="text-align: left;"><strong>الإجمالي:</strong></td>
+            <td><strong>{{ "%.2f"|format(total_amount) }}</strong></td>
+            <td><strong>{{ "%.2f"|format(workers_data|sum(attribute='commission')) }}</strong></td>
+            <td><strong>{{ "%.2f"|format(workers_data|sum(attribute='insurance')) }}</strong></td>
+            <td><strong>{{ "%.2f"|format(workers_data|sum(attribute='tax')) }}</strong></td>
+            <td><strong>{{ "%.2f"|format(total_deductions) }}</strong></td>
+            <td><strong>{{ "%.2f"|format(total_advances) }}</strong></td>
+            <td><strong class="text-success">{{ "%.2f"|format(total_net_amount) }}</strong></td>
+        </tr>
+    </tfoot>
+</table>
+
+<div class="signatures">
+    <div class="signature-box">
+        <div class="signature-line"></div>
+        <p><strong>المختص</strong></p>
+        <p>الاسم: __________________</p>
+        <p>التوقيع: __________________</p>
+        <p>التاريخ: {{ current_datetime.strftime('%Y-%m-%d') }}</p>
+    </div>
+    <div class="signature-box">
+        <div class="signature-line"></div>
+        <p><strong>مدير الإنتاج</strong></p>
+        <p>الاسم: __________________</p>
+        <p>التوقيع: __________________</p>
+        <p>التاريخ: __________________</p>
+    </div>
+    <div class="signature-box">
+        <div class="signature-line"></div>
+        <p><strong>المدير المالي</strong></p>
+        <p>الاسم: __________________</p>
+        <p>التوقيع: __________________</p>
+        <p>التاريخ: __________________</p>
+    </div>
+</div>
+
+<div class="footer">
+    <p>هذا التقرير صادر من نظام معمل الخياطات - نسخة رسمية</p>
+    <p>تم التصدير بواسطة: {{ current_user.username }} | تاريخ التصدير: {{ current_datetime.strftime('%Y-%m-%d %H:%M:%S') }}</p>
+</div>
+
+</body>
+</html>

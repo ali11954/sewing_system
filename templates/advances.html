@@ -50,7 +50,7 @@
                             {% endif %}
                         </td>
                         <td>
-                            {% if 'مساعدة' in adv.worker_name or adv.worker_name in assistants %}
+                            {% if 'مساعدة' in adv.worker_name or adv.worker_name in assistants|map(attribute='name')|list %}
                             <span class="badge bg-secondary">مساعدة</span>
                             {% else %}
                             <span class="badge bg-primary">خياطة</span>
@@ -66,7 +66,7 @@
                         <td>
                             <a href="{{ url_for('delete_advance', id=adv.id) }}"
                                class="btn btn-sm btn-danger"
-                               onclick="return confirmDelete('هل أنت متأكد من حذف هذه السلفة؟')">
+                               onclick="return confirm('هل أنت متأكد من حذف هذه السلفة؟')">
                                 <i class="fas fa-trash"></i>
                             </a>
                         </td>
@@ -97,7 +97,7 @@
 
 <!-- Modal إضافة سلفة -->
 <div class="modal fade" id="addAdvanceModal" tabindex="-1">
-    <div class="modal-dialog">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">
@@ -107,58 +107,81 @@
             </div>
             <form method="POST" action="{{ url_for('add_advance') }}" onsubmit="return validateAdvance()">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">التاريخ</label>
-                        <input type="date" name="date" class="form-control" required
-                               value="{{ datetime.now().strftime('%Y-%m-%d') if datetime else '' }}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">التاريخ</label>
+                                <input type="date" name="date" class="form-control" required
+                                       value="{{ datetime.now().strftime('%Y-%m-%d') }}">
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">المبلغ (ريال)</label>
+                                <input type="number" step="0.01" name="amount" class="form-control"
+                                       required min="0.01" id="amountInput">
+                            </div>
+                        </div>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label">نوع العاملة</label>
-                        <select id="workerType" class="form-select" onchange="updateWorkerList()">
-                            <option value="operator">خياطة رئيسية</option>
-                            <option value="assistant">مساعدة</option>
-                            <option value="temporary">عاملة مؤقتة</option>
+                        <label class="form-label">اختر اسم العاملة</label>
+                        <select name="worker_name" id="workerSelect" class="form-select" size="10" style="height: auto;">
+                            <option value="">-- اختر من القائمة --</option>
+
+                            {% if operators %}
+                            <optgroup label="👩‍🏭 خياطات رئيسيات">
+                                {% for op in operators %}
+                                <option value="{{ op.name }}" data-type="operator" data-machine="{{ op.machine_code }}">
+                                    🧵 {{ op.name }} ({{ op.machine_name }})
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+
+                            {% if assistants %}
+                            <optgroup label="🤝 مساعدات رسميات">
+                                {% for asst in assistants %}
+                                <option value="{{ asst.name }}" data-type="assistant" data-machine="{{ asst.machine_code }}">
+                                    🤝 {{ asst.name }} ({{ asst.machine_name }})
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
+
+                            {% if temp_workers %}
+                            <optgroup label="⏳ عاملات مؤقتات">
+                                {% for temp in temp_workers %}
+                                <option value="{{ temp.name }}" data-type="temporary">
+                                    ⏳ {{ temp.name }}
+                                </option>
+                                {% endfor %}
+                            </optgroup>
+                            {% endif %}
                         </select>
                     </div>
+
                     <div class="mb-3">
-                        <label class="form-label">اسم العاملة</label>
-                        <select name="worker_name" id="workerSelect" class="form-select" required>
-                            <option value="">اختر العاملة...</option>
-                            {% for machine in machines %}
-                            <option value="{{ machine.operator_name }}" data-type="operator">{{ machine.operator_name }} (خياطة - {{ machine.name }})</option>
-                            {% endfor %}
-                            {% for machine in machines %}
-                                {% if machine.assistant_name %}
-                                <option value="{{ machine.assistant_name }}" data-type="assistant">{{ machine.assistant_name }} (مساعدة - {{ machine.name }})</option>
-                                {% endif %}
-                            {% endfor %}
-                            {% for temp in temp_workers %}
-                            <option value="{{ temp }}" data-type="temporary">{{ temp }} (مؤقتة)</option>
-                            {% endfor %}
-                        </select>
-                        <small class="text-muted">يمكنك أيضاً كتابة اسم عاملة جديدة</small>
-                        <input type="text" name="worker_name_new" id="workerNameNew" class="form-control mt-2"
-                               placeholder="أو أدخل اسم عاملة جديدة">
+                        <label class="form-label">أو إضافة عاملة جديدة</label>
+                        <input type="text" name="worker_name_new" id="workerNameNew" class="form-control"
+                               placeholder="أدخل اسم عاملة جديدة (ستُضاف كعاملة مؤقتة)">
+                        <small class="text-muted">إذا قمت بإدخال اسم جديد، سيتم خصم السلفة تحت هذا الاسم</small>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">المبلغ (ريال)</label>
-                        <input type="number" step="0.01" name="amount" class="form-control"
-                               required min="0.01" id="amountInput">
-                        <small class="text-muted">السلفة تكون بقيمة موجبة (تُخصم من الأجر لاحقاً)</small>
-                    </div>
+
                     <div class="form-check mb-3">
                         <input type="checkbox" name="is_temporary" class="form-check-input" id="isTemporary">
                         <label class="form-check-label" for="isTemporary">
-                            عاملة مؤقتة
+                            عاملة مؤقتة (تظهر في تقارير المؤقتات)
                         </label>
                     </div>
+
                     <div class="mb-3">
                         <label class="form-label">ملاحظات</label>
                         <textarea name="notes" class="form-control" rows="2"
                                   placeholder="مثال: سلفة شهر رمضان، سلفة عاجلة..."></textarea>
                     </div>
 
-                    <div class="alert alert-warning mt-3">
+                    <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle"></i>
                         <strong>تنبيه:</strong> السلفة ستُخصم من أجور العاملة عند إعداد المستخلص.
                     </div>
@@ -175,63 +198,25 @@
 </div>
 
 <script>
-// قائمة المساعدات
-const assistants = [
-    {% for machine in machines %}
-        {% if machine.assistant_name %}
-        "{{ machine.assistant_name }}",
-        {% endif %}
-    {% endfor %}
-];
-
-function updateWorkerList() {
-    const workerType = document.getElementById('workerType').value;
-    const workerSelect = document.getElementById('workerSelect');
-    const options = workerSelect.options;
-
-    for (let i = 0; i < options.length; i++) {
-        const option = options[i];
-        const dataType = option.getAttribute('data-type');
-        if (option.value === "") continue;
-
-        if (workerType === 'operator' && dataType === 'operator') {
-            option.style.display = '';
-        } else if (workerType === 'assistant' && dataType === 'assistant') {
-            option.style.display = '';
-        } else if (workerType === 'temporary' && dataType === 'temporary') {
-            option.style.display = '';
-        } else {
-            option.style.display = 'none';
-        }
-    }
-
-    workerSelect.value = '';
-}
-
 function validateAdvance() {
     const amount = document.getElementById('amountInput').value;
     if (parseFloat(amount) <= 0) {
-        alert('المبلغ يجب أن يكون أكبر من صفر');
+        alert('⚠️ المبلغ يجب أن يكون أكبر من صفر');
         return false;
     }
 
     const workerSelect = document.getElementById('workerSelect');
     const workerNew = document.getElementById('workerNameNew');
 
-    if (!workerSelect.value && !workerNew.value) {
-        alert('الرجاء إدخال اسم العاملة');
+    if (!workerSelect.value && !workerNew.value.trim()) {
+        alert('⚠️ الرجاء إدخال اسم العاملة');
         return false;
     }
 
-    // إذا تم إدخال اسم جديد، انسخه إلى الحقل الرئيسي
-    if (workerNew.value) {
-        // إنشاء خيار جديد مؤقت
-        const newOption = document.createElement('option');
-        newOption.value = workerNew.value;
-        newOption.text = workerNew.value + ' (جديد)';
-        newOption.setAttribute('data-type', 'temporary');
-        workerSelect.appendChild(newOption);
-        workerSelect.value = workerNew.value;
+    // إذا تم إدخال اسم جديد
+    if (workerNew.value.trim()) {
+        // تفعيل خيار عاملة مؤقتة تلقائياً
+        document.getElementById('isTemporary').checked = true;
     }
 
     return true;
@@ -248,10 +233,9 @@ document.getElementById('workerSelect').addEventListener('change', function() {
 document.getElementById('workerNameNew').addEventListener('input', function() {
     if (this.value) {
         document.getElementById('workerSelect').value = '';
+        // تفعيل خيار عاملة مؤقتة تلقائياً عند إضافة اسم جديد
+        document.getElementById('isTemporary').checked = true;
     }
 });
-
-// تهيئة القائمة
-updateWorkerList();
 </script>
 {% endblock %}
